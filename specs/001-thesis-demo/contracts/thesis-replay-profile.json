@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "id": "thesis-wave100-replay",
+  "purpose": "historical experiment replay; not evidence of independent held-out evaluation",
+  "pathsRelativeTo": "repositoryRoot",
+  "inputs": {
+    "index": "legacy-pipeline/outputs/full_rerun/index/combined_index.json",
+    "benchmark": "legacy-pipeline/outputs/full_rerun/docs/benchmark_queries_wave100_v1_full_rerun_wave100_v1_clean.json",
+    "boundaryLabels": "legacy-pipeline/docs/segment_boundary_labels_wave100_v1.json",
+    "captionLabels": "legacy-pipeline/docs/caption_quality_labels_wave100_v1.json",
+    "reranker": "legacy-pipeline/outputs/full_rerun/models/reranker_logreg_full_rerun_wave100_v1.json",
+    "comparisonReport": "legacy-pipeline/outputs/full_rerun/eval/reranker_comparison_report_full_rerun_wave100_v1.json",
+    "significanceReport": "legacy-pipeline/outputs/full_rerun/eval/retrieval_significance_full_rerun_wave100_v1.json"
+  },
+  "retrieval": {
+    "topK": 10,
+    "candidateK": 200,
+    "hybridAlpha": 0.6,
+    "iouThreshold": 0.3
+  },
+  "processingDefaults": {
+    "sceneThreshold": 27,
+    "minSceneLenFrames": 15,
+    "fallbackWindowSec": 10,
+    "captionModel": "Salesforce/blip-image-captioning-base",
+    "embeddingModel": "sentence-transformers/all-MiniLM-L6-v2"
+  },
+  "significance": {
+    "iterations": 5000,
+    "proposedReplaySeed": 42,
+    "historicalSeedVerified": false
+  },
+  "historicalContext": {
+    "assetsReported": 896,
+    "queriesRaw": 3500,
+    "queriesClean": 3486,
+    "boundaryLabels": 3000,
+    "captionLabels": 4000
+  },
+  "observedCheckout": {
+    "date": "2026-10-10",
+    "assetsWithSegments": 895,
+    "distinctIndexAssets": 895,
+    "indexBytes": 203767556
+  },
+  "labelProvenance": {
+    "boundary": "benchmark-derived; requires stronger human review",
+    "caption": "heuristic; not final human-reviewed ground truth"
+  },
+  "expectedRecordedMetrics": {
+    "baseline": {
+      "recallAtK": 0.4237,
+      "mrr": 0.2591,
+      "meanTop1Iou": 0.1922
+    },
+    "reranked": {
+      "recallAtK": 0.4329,
+      "mrr": 0.2611,
+      "meanTop1Iou": 0.1922
+    }
+  },
+  "notes": [
+    "Expected metrics validate imported historical report parsing only; never populate live results from them.",
+    "Compute and record file/model/config hashes during actual import.",
+    "Current ASR/OCR methods are stubs; imported text may still be shown.",
+    "Read source artifacts for model identity; default name and matching vector dimension alone do not prove compatibility."
+  ]
+}

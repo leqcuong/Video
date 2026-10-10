@@ -1,0 +1,24 @@
+/legacy-pipeline/
+/legacy-pipeline.zip
+/.specify/
+/.github/
+/.git-archived-VideoTimelineAnalysis/
+
+# .NET, Python, local settings, and generated demo data
+**/bin/
+**/obj/
+**/.vs/
+**/__pycache__/
+**/.pytest_cache/
+**/.venv/
+**/venv/
+**/artifacts/
+**/appsettings.*.local.json
+**/appsettings.Development.json
+*.user
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+!.env.example
