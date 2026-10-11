@@ -37,6 +37,13 @@ public sealed class VideoSegment : VersionedEntity
     public string? OcrText { get; private set; }
     public string? Summary { get; private set; }
     public Guid? ThumbnailArtifactId { get; private set; }
+    public void AddEvidenceText(string? transcriptText, string? ocrText, string? summary)
+    {
+        TranscriptText = string.IsNullOrWhiteSpace(transcriptText) ? null : transcriptText.Trim();
+        OcrText = string.IsNullOrWhiteSpace(ocrText) ? null : ocrText.Trim();
+        Summary = string.IsNullOrWhiteSpace(summary) ? null : summary.Trim();
+        Touch();
+    }
 }
 
 public sealed class IndexMember

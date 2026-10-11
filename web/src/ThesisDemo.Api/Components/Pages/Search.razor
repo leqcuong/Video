@@ -1,0 +1,166 @@
+@page "/search"
+@using ThesisDemo.Application.Collections
+@using ThesisDemo.Application.Search
+@using ThesisDemo.Api.Components.Playback
+@using ThesisDemo.Api.Components.Search
+@inject OperationScope Operations
+
+<PageTitle>Search</PageTitle>
+
+<h1 class="h3">Search</h1>
+
+<div class="search-shell">
+    <section class="search-controls">
+        <label class="form-label" for="collection">Collection</label>
+        <select id="collection" class="form-select" @bind="_collectionId">
+            @foreach (var collection in _collections)
+            {
+                <option value="@collection.Id">@collection.Name (@collection.AssetCount)</option>
+            }
+        </select>
+
+        <label class="form-label mt-3" for="query">Query</label>
+        <input id="query" class="form-control" @bind="_query" @bind:event="oninput" maxlength="2000" />
+
+        <div class="search-grid mt-3">
+            <label>
+                <span>Top K</span>
+                <input class="form-control" type="number" min="1" max="100" @bind="_topK" />
+            </label>
+            <label>
+                <span>Candidate K</span>
+                <input class="form-control" type="number" min="1" max="1000" @bind="_candidateK" />
+            </label>
+            <label>
+                <span>Alpha</span>
+                <input class="form-range" type="range" min="0" max="1" step="0.05" @bind="_alpha" />
+            </label>
+        </div>
+
+        <div class="btn-group mt-3" role="group" aria-label="Search mode">
+            <input type="radio" class="btn-check" name="mode" id="mode-baseline" checked="@(_mode == SearchMode.Baseline)" @onchange="() => _mode = SearchMode.Baseline" />
+            <label class="btn btn-outline-primary" for="mode-baseline">Baseline</label>
+            <input type="radio" class="btn-check" name="mode" id="mode-compare" checked="@(_mode == SearchMode.Compare)" @onchange="() => _mode = SearchMode.Compare" />
+            <label class="btn btn-outline-primary" for="mode-compare">Compare</label>
+        </div>
+
+        @if (_mode != SearchMode.Baseline)
+        {
+            <label class="form-label mt-3" for="model">Model</label>
+            <input id="model" class="form-control" @bind="_modelId" />
+        }
+
+        <div class="d-flex gap-2 mt-3">
+            <button class="btn btn-primary" @onclick="RunSearchAsync" disabled="@(!_collectionId.HasValue || _busy)">Search</button>
+            <button class="btn btn-outline-secondary" @onclick="CancelSearch" disabled="@(!_busy)">Cancel</button>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_status))
+        {
+            <div class="alert alert-info mt-3 py-2">@_status</div>
+        }
+    </section>
+
+    <section class="search-results">
+        @if (_response?.Warnings.Count > 0)
+        {
+            <div class="alert alert-warning py-2">@string.Join(" ", _response.Warnings)</div>
+        }
+
+        @if (_mode == SearchMode.Compare && _response is not null)
+        {
+            <ComparisonView BaselineResults="@_response.BaselineResults" RerankedResults="@_response.RerankedResults" Selected="SelectResult" />
+        }
+        else if (_results.Count == 0)
+        {
+            <div class="segment-list__empty">No results</div>
+        }
+        else
+        {
+            @foreach (var result in _results)
+            {
+                <button type="button"
+                        class="segment-list__item @(result.SegmentId == _selected?.SegmentId ? "is-active" : "")"
+                        @onclick="() => SelectResult(result)">
+                    <span class="segment-list__time">@FormatTime(result.StartSec) - @FormatTime(result.EndSec)</span>
+                    <span class="segment-list__caption">
+                        <strong>@result.Rank. @result.LegacyAssetId / @result.LegacySegmentId</strong><br />
+                        @result.Caption
+                    </span>
+                    <span class="segment-list__meta">@result.ScoreKind @result.Score.ToString("0.000")</span>
+                </button>
+            }
+        }
+    </section>
+
+    <section class="search-player">
+        <VideoPlayer MediaUrl="@_selected?.MediaUrl" StartSec="@(_selected?.StartSec ?? 0)" EndSec="@(_selected?.EndSec ?? 0)" Autoplay="false" />
+    </section>
+</div>
+
+@code {
+    private IReadOnlyList<CollectionDto> _collections = [];
+    private Guid? _collectionId;
+    private string _query = "";
+    private int _topK = 10;
+    private int _candidateK = 200;
+    private double _alpha = 0.6;
+    private SearchMode _mode = SearchMode.Baseline;
+    private string _modelId = "lexical-fallback";
+    private SearchResponse? _response;
+    private List<SearchResultDto> _results = [];
+    private SearchResultDto? _selected;
+    private string? _status;
+    private bool _busy;
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var page = await Operations.ExecuteAsync((services, ct) =>
+            services.GetRequiredService<CollectionHandlers>().ListAsync(1, 100, ct));
+        _collections = page.Items;
+        _collectionId = _collections.FirstOrDefault()?.Id;
+    }
+
+    private async Task RunSearchAsync()
+    {
+        if (!_collectionId.HasValue) return;
+        _cts?.Cancel();
+        _cts = new CancellationTokenSource();
+        _busy = true;
+        _status = "Searching...";
+        _selected = null;
+        try
+        {
+            var request = new SearchRequest(_query, TopK: _topK, CandidateK: _candidateK, HybridAlpha: _alpha,
+                Mode: _mode, ModelId: _mode == SearchMode.Baseline ? null : _modelId);
+            _response = await Operations.ExecuteAsync((services, ct) =>
+                services.GetRequiredService<ISearchService>().SearchAsync(_collectionId.Value, request, ct), _cts.Token);
+            _results = (_response.RerankedResults ?? _response.BaselineResults ?? []).ToList();
+            _selected = _results.FirstOrDefault();
+            _status = $"{_results.Count} result(s) in {_response.ElapsedMs} ms.";
+        }
+        catch (OperationCanceledException)
+        {
+            _status = "Canceled.";
+        }
+        catch (Exception ex)
+        {
+            _status = ex.Message;
+            _results = [];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void CancelSearch() => _cts?.Cancel();
+    private void SelectResult(SearchResultDto result) => _selected = result;
+
+    private static string FormatTime(double seconds)
+    {
+        var total = TimeSpan.FromSeconds(Math.Max(0, seconds));
+        return total.TotalHours >= 1 ? total.ToString(@"hh\:mm\:ss") : total.ToString(@"mm\:ss");
+    }
+}

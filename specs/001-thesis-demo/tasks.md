@@ -26,23 +26,23 @@ Checkpoint: compile, architecture checks, migrations, diagnostic output.
 
 ## Phase 2: US1 - Import and Browse Prepared Corpus (P1)
 
-- [ ] T009 [US1] Implement collection handlers/controllers in web/src/ThesisDemo.Application/Collections and web/src/ThesisDemo.Api/Controllers/CollectionsController.cs.
-- [ ] T010 [US1] Implement local media storage and legacy-ID/source-root mapping in web/src/ThesisDemo.Infrastructure/Storage/LocalMediaStore.cs.
-- [ ] T011 [US1] Implement preview/commit/idempotent import and snapshot provenance in web/src/ThesisDemo.Infrastructure/Legacy/LegacyCorpusImporter.cs; use raw artifact hashes and actual counts.
-- [ ] T012 [US1] Build import preview, collection/library tables and diagnostics in web/src/ThesisDemo.Api/Components/Pages/Library; add V01/V02 fixtures in web/tests/ThesisDemo.IntegrationTests/Imports.
+- [x] T009 [US1] Implement collection handlers/controllers in web/src/ThesisDemo.Application/Collections and web/src/ThesisDemo.Api/Controllers/CollectionsController.cs.
+- [x] T010 [US1] Implement local media storage and legacy-ID/source-root mapping in web/src/ThesisDemo.Infrastructure/Storage/LocalMediaStore.cs.
+- [x] T011 [US1] Implement preview/commit/idempotent import and snapshot provenance in web/src/ThesisDemo.Infrastructure/Legacy/LegacyCorpusImporter.cs; use raw artifact hashes and actual counts.
+- [x] T012 [US1] Build import preview, collection/library tables and diagnostics in web/src/ThesisDemo.Api/Components/Pages/Library; add V01/V02 fixtures in web/tests/ThesisDemo.IntegrationTests/Imports.
 
 Dependencies: foundation; T009/T010 before T011, importer contract before T012.
 Independent verification: V01/V02 on a small corpus, then current full corpus import.
 
 ## Phase 3: US2 - Search, Comparison and Playback (P1)
 
-- [ ] T013 [US2] Implement web/bridge/search_worker.py and Infrastructure/Legacy/PythonSearchProcess.cs for versioned JSONL, warm models/index, bounds, deadlines and controlled restart.
-- [ ] T014 [US2] Implement web/src/ThesisDemo.Api/Controllers/MediaController.cs and SegmentsController.cs with ranges, HEAD, registered thumbnails and version-pinned segment browsing.
-- [ ] T015 [US2] Build reusable VideoPlayer.razor, SegmentList.razor and wwwroot/js/video-player.js under ThesisDemo.Api for fractional seek, interval highlight and missing/unsupported media.
-- [ ] T016 [US2] Implement query validation, scope, selected snapshot and Python ID/URL mapping in web/src/ThesisDemo.Application/Search and Api/Controllers/SearchController.cs.
-- [ ] T017 [US2] Build web/src/ThesisDemo.Api/Components/Pages/Search.razor with alpha/K controls, request cancellation, states, result list and responsive layout.
-- [ ] T018 [US2] Implement model registry/import validation and legacy private-function compatibility wrapper in web/bridge/reranker_adapter.py and Infrastructure/Legacy/RerankerRegistry.cs.
-- [ ] T019 [US2] Add baseline/reranked comparison and model selection in web/src/ThesisDemo.Api/Components/Search/ComparisonView.razor; preserve source intervals and score semantics.
+- [x] T013 [US2] Implement web/bridge/search_worker.py and Infrastructure/Legacy/PythonSearchProcess.cs for versioned JSONL, warm models/index, bounds, deadlines and controlled restart.
+- [x] T014 [US2] Implement web/src/ThesisDemo.Api/Controllers/MediaController.cs and SegmentsController.cs with ranges, HEAD, registered thumbnails and version-pinned segment browsing.
+- [x] T015 [US2] Build reusable VideoPlayer.razor, SegmentList.razor and wwwroot/js/video-player.js under ThesisDemo.Api for fractional seek, interval highlight and missing/unsupported media.
+- [x] T016 [US2] Implement query validation, scope, selected snapshot and Python ID/URL mapping in web/src/ThesisDemo.Application/Search and Api/Controllers/SearchController.cs.
+- [x] T017 [US2] Build web/src/ThesisDemo.Api/Components/Pages/Search.razor with alpha/K controls, request cancellation, states, result list and responsive layout.
+- [x] T018 [US2] Implement model registry/import validation and legacy private-function compatibility wrapper in web/bridge/reranker_adapter.py and Infrastructure/Legacy/RerankerRegistry.cs.
+- [x] T019 [US2] Add baseline/reranked comparison and model selection in web/src/ThesisDemo.Api/Components/Search/ComparisonView.razor; preserve source intervals and score semantics.
 
 Dependencies: US1 fixtures available; T013 before T016; T014 before browser playback;
 T018 before T019. Independent verification: V03/V05/V06.

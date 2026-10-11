@@ -58,3 +58,146 @@ h1:focus {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+.video-player {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.video-player__media {
+    width: 100%;
+    max-height: 65vh;
+    background: #111;
+}
+
+.video-player__state {
+    min-height: 10rem;
+    display: grid;
+    place-items: center;
+    border: 1px solid #d7dce2;
+    color: #5c6875;
+    background: #f7f9fb;
+}
+
+.video-player__interval {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    font-size: 0.9rem;
+    color: #4f5d6b;
+}
+
+.segment-list {
+    display: grid;
+    gap: 0.4rem;
+}
+
+.segment-list__item {
+    display: grid;
+    grid-template-columns: minmax(6rem, 8rem) 1fr auto;
+    gap: 0.75rem;
+    align-items: start;
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid #d7dce2;
+    background: #fff;
+    text-align: left;
+}
+
+.segment-list__item.is-active {
+    border-color: #1b6ec2;
+    background: #eef6ff;
+}
+
+.segment-list__time {
+    font-variant-numeric: tabular-nums;
+    color: #52606d;
+}
+
+.segment-list__caption {
+    overflow-wrap: anywhere;
+}
+
+.segment-list__meta {
+    color: #667485;
+    font-size: 0.85rem;
+}
+
+.segment-list__empty {
+    padding: 1rem;
+    color: #667485;
+    border: 1px solid #d7dce2;
+}
+
+@media (max-width: 700px) {
+    .segment-list__item {
+        grid-template-columns: 1fr;
+    }
+}
+
+.search-shell {
+    display: grid;
+    grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+.search-controls,
+.search-results,
+.search-player {
+    min-width: 0;
+}
+
+.search-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.search-grid label {
+    display: grid;
+    gap: 0.25rem;
+    font-size: 0.9rem;
+}
+
+.search-player {
+    grid-column: 2;
+}
+
+@media (max-width: 900px) {
+    .search-shell {
+        grid-template-columns: 1fr;
+    }
+
+    .search-player {
+        grid-column: auto;
+    }
+}
+
+.comparison-view {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.comparison-view__row {
+    display: grid;
+    gap: 0.2rem;
+    width: 100%;
+    margin-bottom: 0.4rem;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid #d7dce2;
+    background: #fff;
+    text-align: left;
+}
+
+.comparison-view__row:focus,
+.comparison-view__row:hover {
+    border-color: #1b6ec2;
+}
+
+@media (max-width: 800px) {
+    .comparison-view {
+        grid-template-columns: 1fr;
+    }
+}

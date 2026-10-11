@@ -64,6 +64,11 @@ public sealed class VideoAsset : VersionedEntity
     public int Width { get; private set; }
     public int Height { get; private set; }
     public AssetState State { get; private set; } = AssetState.Imported;
+    public void AttachMedia(Guid mediaArtifactId)
+    {
+        if (mediaArtifactId == Guid.Empty) throw new ArgumentException("Media artifact is required.", nameof(mediaArtifactId));
+        MediaArtifactId = mediaArtifactId; Touch();
+    }
     public void SetState(AssetState state)
     {
         if (!Allowed.TryGetValue(State, out var next) || !next.Contains(state)) throw new InvalidOperationException($"Cannot transition {State} to {state}.");

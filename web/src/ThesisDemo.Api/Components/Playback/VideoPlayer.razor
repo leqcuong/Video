@@ -1,0 +1,58 @@
+@using Microsoft.JSInterop
+@inject IJSRuntime Js
+
+<div class="video-player">
+    @if (string.IsNullOrWhiteSpace(MediaUrl))
+    {
+        <div class="video-player__state">Media unavailable</div>
+    }
+    else
+    {
+        <video id="@_elementId" class="video-player__media" controls preload="metadata" @onerror="HandleError">
+            <source src="@MediaUrl" />
+        </video>
+        @if (_unsupported)
+        {
+            <div class="video-player__state">Unsupported or missing media</div>
+        }
+        @if (EndSec > StartSec)
+        {
+            <div class="video-player__interval">
+                <span>Segment</span>
+                <strong>@StartSec.ToString("0.###")s - @EndSec.ToString("0.###")s</strong>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private readonly string _elementId = $"video_{Guid.NewGuid():N}";
+    private bool _unsupported;
+    private bool _needsSeek;
+
+    [Parameter] public string? MediaUrl { get; set; }
+    [Parameter] public double StartSec { get; set; }
+    [Parameter] public double EndSec { get; set; }
+    [Parameter] public bool Autoplay { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        _unsupported = false;
+        _needsSeek = !string.IsNullOrWhiteSpace(MediaUrl) && StartSec >= 0;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_needsSeek) return;
+        _needsSeek = false;
+        await SeekAsync();
+    }
+
+    public async Task SeekAsync()
+    {
+        if (string.IsNullOrWhiteSpace(MediaUrl)) return;
+        await Js.InvokeVoidAsync("thesisVideoPlayer.seekToInterval", _elementId, StartSec, EndSec, Autoplay);
+    }
+
+    private void HandleError() => _unsupported = true;
+}

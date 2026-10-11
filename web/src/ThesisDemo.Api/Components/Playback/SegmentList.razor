@@ -1,0 +1,37 @@
+@using ThesisDemo.Application.Collections
+
+<div class="segment-list">
+    @if (Segments.Count == 0)
+    {
+        <div class="segment-list__empty">No segments</div>
+    }
+    else
+    {
+        @foreach (var segment in Segments)
+        {
+            <button type="button"
+                    class="segment-list__item @(segment.Id == SelectedSegmentId ? "is-active" : "")"
+                    @onclick="() => SelectAsync(segment)">
+                <span class="segment-list__time">@FormatTime(segment.StartSec) - @FormatTime(segment.EndSec)</span>
+                <span class="segment-list__caption">@segment.Caption</span>
+                <span class="segment-list__meta">@segment.ModalityAvailability</span>
+            </button>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<SegmentDto> Segments { get; set; } = [];
+    [Parameter] public Guid? SelectedSegmentId { get; set; }
+    [Parameter] public EventCallback<SegmentDto> SelectedSegmentChanged { get; set; }
+
+    private Task SelectAsync(SegmentDto segment) => SelectedSegmentChanged.InvokeAsync(segment);
+
+    private static string FormatTime(double seconds)
+    {
+        var total = TimeSpan.FromSeconds(Math.Max(0, seconds));
+        return total.TotalHours >= 1
+            ? total.ToString(@"hh\:mm\:ss")
+            : total.ToString(@"mm\:ss");
+    }
+}

@@ -1,0 +1,214 @@
+@page "/library"
+@using ThesisDemo.Application.Collections
+@using ThesisDemo.Infrastructure.Storage
+@inject OperationScope Operations
+
+<PageTitle>Library</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between gap-3 mb-3">
+    <h1 class="h3 mb-0">Library</h1>
+    <button class="btn btn-primary" @onclick="CreateCollectionAsync" disabled="@_busy">New collection</button>
+</div>
+
+<div class="row g-3">
+    <section class="col-lg-4">
+        <h2 class="h5">Collections</h2>
+        <div class="list-group">
+            @foreach (var collection in _collections)
+            {
+                <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center @(collection.Id == _selectedCollectionId ? "active" : "")"
+                        @onclick="() => SelectCollectionAsync(collection.Id)">
+                    <span>@collection.Name</span>
+                    <span class="badge text-bg-secondary">@collection.AssetCount</span>
+                </button>
+            }
+        </div>
+    </section>
+
+    <section class="col-lg-8">
+        <div class="d-flex align-items-end gap-2 mb-3">
+            <div class="flex-grow-1">
+                <label class="form-label" for="source">Source</label>
+                <select id="source" class="form-select" @bind="_sourceId">
+                    @foreach (var source in _sources)
+                    {
+                        <option value="@source.Id">@source.Id</option>
+                    }
+                </select>
+            </div>
+            <button class="btn btn-outline-primary" @onclick="PreviewAsync" disabled="@(!_selectedCollectionId.HasValue || _busy)">Preview</button>
+            <button class="btn btn-success" @onclick="CommitAsync" disabled="@(!_selectedCollectionId.HasValue || _preview is null || _busy)">Commit</button>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_status))
+        {
+            <div class="alert alert-info py-2">@_status</div>
+        }
+
+        @if (_preview is not null)
+        {
+            <h2 class="h5">Preview</h2>
+            <div class="table-responsive mb-4">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Assets</th>
+                            <th>Valid</th>
+                            <th>Invalid</th>
+                            <th>Segments</th>
+                            <th>Preview ID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>@_preview.AssetsDiscovered</td>
+                            <td>@_preview.AssetsValid</td>
+                            <td>@_preview.AssetsInvalid</td>
+                            <td>@_preview.SegmentsDiscovered</td>
+                            <td><code>@ShortId(_preview.PreviewId)</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <h2 class="h5">Assets</h2>
+        <div class="table-responsive">
+            <table class="table table-hover table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Legacy ID</th>
+                        <th>State</th>
+                        <th>Media</th>
+                        <th class="text-end">Duration</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var asset in _assets)
+                    {
+                        <tr>
+                            <td>@asset.OriginalFileName</td>
+                            <td><code>@asset.LegacyAssetId</code></td>
+                            <td>@asset.State</td>
+                            <td>@asset.MediaAvailability</td>
+                            <td class="text-end">@asset.DurationSec.ToString("0.0")s</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (_diagnostics.Count > 0)
+        {
+            <h2 class="h5 mt-4">Diagnostics</h2>
+            <ul class="list-unstyled small">
+                @foreach (var diagnostic in _diagnostics.Take(20))
+                {
+                    <li>@diagnostic</li>
+                }
+            </ul>
+        }
+    </section>
+</div>
+
+@code {
+    private IReadOnlyList<CollectionDto> _collections = [];
+    private IReadOnlyList<AssetDto> _assets = [];
+    private IReadOnlyList<RegisteredLegacySource> _sources = [];
+    private readonly List<string> _diagnostics = [];
+    private Guid? _selectedCollectionId;
+    private string _sourceId = "full-rerun";
+    private ImportPreviewResult? _preview;
+    private string? _status;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Operations.ExecuteAsync((services, ct) =>
+        {
+            _sources = services.GetRequiredService<LocalMediaStore>().ListSources();
+            _sourceId = _sources.FirstOrDefault()?.Id ?? _sourceId;
+            return Task.FromResult(0);
+        });
+        await LoadCollectionsAsync();
+    }
+
+    private async Task LoadCollectionsAsync()
+    {
+        var page = await Operations.ExecuteAsync((services, ct) =>
+            services.GetRequiredService<CollectionHandlers>().ListAsync(1, 100, ct));
+        _collections = page.Items;
+        _selectedCollectionId ??= _collections.FirstOrDefault()?.Id;
+        await LoadAssetsAsync();
+    }
+
+    private async Task SelectCollectionAsync(Guid id)
+    {
+        _selectedCollectionId = id;
+        _preview = null;
+        _diagnostics.Clear();
+        await LoadAssetsAsync();
+    }
+
+    private async Task CreateCollectionAsync()
+    {
+        await RunAsync(async () =>
+        {
+            await Operations.ExecuteAsync((services, ct) =>
+                services.GetRequiredService<CollectionHandlers>().CreateAsync(new CreateCollectionCommand($"Imported corpus {DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}"), ct));
+            await LoadCollectionsAsync();
+        });
+    }
+
+    private async Task PreviewAsync()
+    {
+        if (!_selectedCollectionId.HasValue) return;
+        await RunAsync(async () =>
+        {
+            _preview = await Operations.ExecuteAsync((services, ct) =>
+                services.GetRequiredService<ILegacyCorpusImporter>().PreviewAsync(_selectedCollectionId.Value, _sourceId, ct));
+            _diagnostics.Clear();
+            _diagnostics.AddRange(_preview.Diagnostics);
+            _status = $"Previewed {_preview.AssetsDiscovered} assets.";
+        });
+    }
+
+    private async Task CommitAsync()
+    {
+        if (!_selectedCollectionId.HasValue || _preview is null) return;
+        await RunAsync(async () =>
+        {
+            var result = await Operations.ExecuteAsync((services, ct) =>
+                services.GetRequiredService<ILegacyCorpusImporter>().CommitAsync(_selectedCollectionId.Value, _sourceId, _preview.PreviewId, ct));
+            _diagnostics.Clear();
+            _diagnostics.AddRange(result.Diagnostics);
+            _status = $"Imported {result.AssetsImported}; skipped {result.AssetsSkipped}; conflicts {result.AssetsConflicted}.";
+            await LoadCollectionsAsync();
+            await LoadAssetsAsync();
+        });
+    }
+
+    private async Task LoadAssetsAsync()
+    {
+        if (!_selectedCollectionId.HasValue)
+        {
+            _assets = [];
+            return;
+        }
+        var page = await Operations.ExecuteAsync((services, ct) =>
+            services.GetRequiredService<CollectionHandlers>().ListAssetsAsync(_selectedCollectionId.Value, new ListAssetsQuery(1, 100), ct));
+        _assets = page.Items;
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _status = null;
+        try { await action(); }
+        catch (Exception ex) { _status = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private static string ShortId(string value) => value[..Math.Min(12, value.Length)];
+}

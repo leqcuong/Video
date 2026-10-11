@@ -1,16 +1,25 @@
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json.Serialization;
 using ThesisDemo.Api.Components;
 using ThesisDemo.Api.Middleware;
 using ThesisDemo.Application.Artifacts;
+using ThesisDemo.Application.Collections;
+using ThesisDemo.Application.Search;
+using ThesisDemo.Infrastructure.Collections;
 using ThesisDemo.Infrastructure.Jobs;
+using ThesisDemo.Infrastructure.Legacy;
 using ThesisDemo.Infrastructure.Persistence;
+using ThesisDemo.Infrastructure.Storage;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls(LoopbackHost.Validate(builder.Configuration["Host:Url"]));
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
-builder.Services.AddControllersWithViews().ConfigureApiBehaviorOptions(options => options.InvalidModelStateResponseFactory = context =>
+builder.Services.AddControllersWithViews().AddJsonOptions(options =>
+{
+    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+}).ConfigureApiBehaviorOptions(options => options.InvalidModelStateResponseFactory = context =>
 {
     var fields = context.ModelState.Where(x => x.Value?.Errors.Count > 0)
         .ToDictionary(x => x.Key, x => x.Value!.Errors.Select(e => e.ErrorMessage).ToArray());
@@ -30,6 +39,12 @@ builder.Services.AddAntiforgery(options => options.HeaderName = "X-CSRF-TOKEN");
 builder.Services.AddThesisPersistence(builder.Configuration);
 builder.Services.AddScoped<OperationScope>();
 builder.Services.AddScoped<CollectionOverview>();
+builder.Services.AddScoped<CollectionHandlers>();
+builder.Services.AddScoped<CollectionImportHandlers>();
+builder.Services.AddScoped<ICollectionStore, EfCollectionStore>();
+builder.Services.AddScoped<ILegacyCorpusImporter, LegacyCorpusImporter>();
+builder.Services.AddScoped<ISearchService, LegacySearchService>();
+builder.Services.AddSingleton<LocalMediaStore>();
 builder.Services.AddScoped<IDurableJobRepository, DurableJobRepository>();
 builder.Services.AddSingleton<JobDispatcher>();
 builder.Services.AddSingleton<IJobDispatcher>(sp => sp.GetRequiredService<JobDispatcher>());

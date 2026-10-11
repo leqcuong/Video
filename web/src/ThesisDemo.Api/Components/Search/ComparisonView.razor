@@ -1,0 +1,54 @@
+@using ThesisDemo.Application.Search
+
+<div class="comparison-view">
+    <section>
+        <h2 class="h6">Baseline</h2>
+        @RenderRows(BaselineResults, false)
+    </section>
+    <section>
+        <h2 class="h6">Reranked</h2>
+        @RenderRows(RerankedResults, true)
+    </section>
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<SearchResultDto>? BaselineResults { get; set; }
+    [Parameter] public IReadOnlyList<SearchResultDto>? RerankedResults { get; set; }
+    [Parameter] public EventCallback<SearchResultDto> Selected { get; set; }
+
+    private RenderFragment RenderRows(IReadOnlyList<SearchResultDto>? rows, bool showBaselineRank) => builder =>
+    {
+        var sequence = 0;
+        if (rows is null || rows.Count == 0)
+        {
+            builder.OpenElement(sequence++, "div");
+            builder.AddAttribute(sequence++, "class", "segment-list__empty");
+            builder.AddContent(sequence++, "No results");
+            builder.CloseElement();
+            return;
+        }
+        foreach (var row in rows)
+        {
+            builder.OpenElement(sequence++, "button");
+            builder.AddAttribute(sequence++, "type", "button");
+            builder.AddAttribute(sequence++, "class", "comparison-view__row");
+            builder.AddAttribute(sequence++, "onclick", EventCallback.Factory.Create(this, () => Selected.InvokeAsync(row)));
+            builder.OpenElement(sequence++, "span");
+            builder.AddContent(sequence++, $"{row.Rank}. {row.LegacyAssetId}/{row.LegacySegmentId}");
+            builder.CloseElement();
+            builder.OpenElement(sequence++, "span");
+            builder.AddContent(sequence++, $"{row.StartSec:0.###}s - {row.EndSec:0.###}s");
+            builder.CloseElement();
+            builder.OpenElement(sequence++, "strong");
+            builder.AddContent(sequence++, $"{row.ScoreKind}: {row.Score:0.000}");
+            builder.CloseElement();
+            if (showBaselineRank && row.BaselineRank.HasValue)
+            {
+                builder.OpenElement(sequence++, "span");
+                builder.AddContent(sequence++, $"baseline rank {row.BaselineRank}");
+                builder.CloseElement();
+            }
+            builder.CloseElement();
+        }
+    };
+}
