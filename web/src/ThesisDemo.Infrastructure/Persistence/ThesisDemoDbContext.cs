@@ -5,6 +5,7 @@ using ThesisDemo.Domain.Library;
 using ThesisDemo.Domain.Processing;
 using ThesisDemo.Domain.Search;
 using ThesisDemo.Infrastructure.Jobs;
+using ThesisDemo.Infrastructure.Research;
 
 namespace ThesisDemo.Infrastructure.Persistence;
 
@@ -22,6 +23,9 @@ public class ThesisDemoDbContext(DbContextOptions options) : DbContext(options)
     public DbSet<IndexMember> IndexMembers => Set<IndexMember>();
     public DbSet<ArtifactRecord> Artifacts => Set<ArtifactRecord>();
     public DbSet<DurableJob> Jobs => Set<DurableJob>();
+    public DbSet<JobEvent> JobEvents => Set<JobEvent>();
+    public DbSet<RecordedEvaluation> RecordedEvaluations => Set<RecordedEvaluation>();
+    public DbSet<RecordedQuery> RecordedQueries => Set<RecordedQuery>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -31,11 +35,16 @@ public class ThesisDemoDbContext(DbContextOptions options) : DbContext(options)
         b.Entity<IndexSnapshot>().HasIndex(x => new { x.CollectionId, x.State });
         b.Entity<ProcessingRun>().HasIndex(x => new { x.State, x.CreatedUtc });
         b.Entity<DurableJob>().HasIndex(x => new { x.State, x.CreatedUtc });
+        b.Entity<DurableJob>().HasIndex(x => new { x.CollectionId, x.IdempotencyKey }).IsUnique();
         b.Entity<DurableJob>().Property(x => x.Version).IsConcurrencyToken();
+        b.Entity<JobEvent>().HasKey(x => x.Id);
+        b.Entity<JobEvent>().HasIndex(x => new { x.JobId, x.Id });
         b.Entity<VideoSegment>().HasIndex(x => new { x.SegmentSetId, x.LegacySegmentId }).IsUnique();
         b.Entity<VideoSegment>().HasIndex(x => new { x.SegmentSetId, x.StartSec });
         b.Entity<IndexMember>().HasKey(x => new { x.IndexId, x.AssetId });
         b.Entity<ArtifactRecord>().HasIndex(x => x.RelativePath).IsUnique();
+        b.Entity<RecordedEvaluation>().HasIndex(x => x.SourceId).IsUnique();
+        b.Entity<RecordedQuery>().HasIndex(x => new { x.EvaluationId, x.Ordinal }).IsUnique();
         foreach (var type in new[] { typeof(Collection), typeof(VideoAsset), typeof(ProcessingRun), typeof(ProcessingAssetAttempt), typeof(IndexSnapshot), typeof(SegmentSet), typeof(VideoSegment), typeof(ArtifactRecord) })
         {
             var entity = b.Entity(type);

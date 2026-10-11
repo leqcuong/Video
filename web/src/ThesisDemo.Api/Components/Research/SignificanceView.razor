@@ -1,0 +1,59 @@
+@using System.Text.Json
+
+<h2 class="h5">Paired bootstrap significance</h2>
+@if (string.IsNullOrWhiteSpace(SummaryJson))
+{
+    <p>No significance report is registered.</p>
+}
+else
+{
+    <p class="small text-secondary">Recorded evidence, @_iterations finite bootstrap resamples. A recorded p-value of zero means no such event was observed among these resamples; it does not mean probability is mathematically zero.</p>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Metric</th><th>Baseline</th><th>Reranked</th><th>Delta</th><th>95% CI (delta)</th><th>Two-sided p</th></tr></thead>
+            <tbody>
+                @foreach (var row in _rows)
+                {
+                    <tr>
+                        <td>@row.Name</td><td>@row.Baseline.ToString("0.0000")</td><td>@row.Reranked.ToString("0.0000")</td>
+                        <td>@row.Delta.ToString("+0.0000;-0.0000;0.0000")</td>
+                        <td>@row.Low.ToString("0.0000") to @row.High.ToString("0.0000")</td>
+                        <td>@(row.P == 0 ? "0 recorded (finite sample)" : row.P.ToString("0.####"))</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    @foreach (var row in _rows)
+    {
+        <div class="d-flex gap-2 align-items-center small mb-2">
+            <span style="width:155px">@row.Name</span>
+            <div class="bg-light border" style="height:12px;width:230px" role="img" aria-label="@row.Name delta @row.Delta">
+                <div class="bg-success h-100" style="width:@(Math.Clamp(Math.Abs(row.Delta) * 1000, 0, 100).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture))%"></div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public string? SummaryJson { get; set; }
+    private int _iterations;
+    private List<Metric> _rows = [];
+    protected override void OnParametersSet()
+    {
+        _rows.Clear();
+        _iterations = 0;
+        if (string.IsNullOrWhiteSpace(SummaryJson)) return;
+        using var doc = JsonDocument.Parse(SummaryJson);
+        if (doc.RootElement.TryGetProperty("bootstrap_iterations", out var count)) _iterations = count.GetInt32();
+        if (!doc.RootElement.TryGetProperty("metrics", out var metrics)) return;
+        foreach (var property in metrics.EnumerateObject())
+        {
+            var value = property.Value;
+            _rows.Add(new Metric(property.Name, Get(value, "baseline_mean"), Get(value, "reranked_mean"),
+                Get(value, "delta"), Get(value, "delta_ci95_low"), Get(value, "delta_ci95_high"), Get(value, "p_two_sided_bootstrap")));
+        }
+    }
+    private static double Get(JsonElement value, string key) => value.TryGetProperty(key, out var child) ? child.GetDouble() : 0;
+    private sealed record Metric(string Name, double Baseline, double Reranked, double Delta, double Low, double High, double P);
+}

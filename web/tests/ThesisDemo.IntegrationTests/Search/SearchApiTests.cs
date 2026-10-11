@@ -61,6 +61,81 @@ public sealed class SearchApiTests
         Assert.Equal(HttpStatusCode.BadRequest, badResponse.StatusCode);
     }
 
+    [Theory]
+    [InlineData(0.0, 1)]
+    [InlineData(0.6, 2)]
+    [InlineData(1.0, 10)]
+    public async Task V03_hybrid_modes_return_repeatable_ranked_segments(double alpha, int topK)
+    {
+        using var app = CreateFactory();
+        using var client = app.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("http://127.0.0.1:5074") });
+        var token = await GetTokenAsync(client);
+        var collection = await CreateCollectionAsync(client, token);
+        var preview = await PostImportAsync<ImportPreviewResult>(client, token, collection.Id, new { registeredSourceId = "v01", action = "preview" }, HttpStatusCode.Accepted);
+        await PostImportAsync<ImportCommitResult>(client, token, collection.Id, new { registeredSourceId = "v01", action = "commit", previewId = preview.PreviewId }, HttpStatusCode.OK);
+        var body = new { query = "rocket water", topK, candidateK = Math.Max(10, topK), hybridAlpha = alpha, mode = "baseline" };
+        var first = await PostSearchAsync(client, token, collection.Id, body, HttpStatusCode.OK);
+        var second = await PostSearchAsync(client, token, collection.Id, body, HttpStatusCode.OK);
+        Assert.Equal(alpha, first.EffectiveConfig.HybridAlpha, 6);
+        Assert.Equal(topK, first.EffectiveConfig.TopK);
+        Assert.NotEmpty(first.BaselineResults!);
+        Assert.True(first.BaselineResults!.Count <= topK);
+        Assert.Equal(first.BaselineResults.Select(x => (x.LegacyAssetId, x.LegacySegmentId)),
+            second.BaselineResults!.Select(x => (x.LegacyAssetId, x.LegacySegmentId)));
+        Assert.Equal(first.BaselineResults.Select(x => x.Score), second.BaselineResults!.Select(x => x.Score));
+        Assert.All(first.BaselineResults, x =>
+        {
+            Assert.NotEqual(Guid.Empty, x.AssetId);
+            Assert.True(x.EndSec > x.StartSec);
+            Assert.True(double.IsFinite(x.Score));
+            Assert.StartsWith("/api/v1/assets/", x.MediaUrl);
+        });
+    }
+
+    [Fact]
+    public async Task V03_asset_filter_and_parameter_errors_are_enforced()
+    {
+        using var app = CreateFactory();
+        using var client = app.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("http://127.0.0.1:5074") });
+        var token = await GetTokenAsync(client);
+        var collection = await CreateCollectionAsync(client, token);
+        var preview = await PostImportAsync<ImportPreviewResult>(client, token, collection.Id, new { registeredSourceId = "v01", action = "preview" }, HttpStatusCode.Accepted);
+        await PostImportAsync<ImportCommitResult>(client, token, collection.Id, new { registeredSourceId = "v01", action = "commit", previewId = preview.PreviewId }, HttpStatusCode.OK);
+        var assets = (await client.GetFromJsonAsync<PageResult<AssetDto>>($"/api/v1/collections/{collection.Id}/assets"))!;
+        var clipB = Assert.Single(assets.Items, x => x.LegacyAssetId == "clip_b");
+        var scoped = await PostSearchAsync(client, token, collection.Id, new
+        {
+            query = "rocket water", topK = 10, candidateK = 10, hybridAlpha = 0.6,
+            mode = "baseline", assetIds = new[] { clipB.Id }
+        }, HttpStatusCode.OK);
+        Assert.NotEmpty(scoped.BaselineResults!);
+        Assert.All(scoped.BaselineResults!, x => Assert.Equal(clipB.Id, x.AssetId));
+
+        foreach (var body in new object[]
+        {
+            new { query = "rocket", topK = 2, candidateK = 1, hybridAlpha = 0.6 },
+            new { query = "rocket", topK = 1, candidateK = 1, hybridAlpha = -0.1 },
+            new { query = "rocket", topK = 1, candidateK = 1, hybridAlpha = 1.1 },
+            new { query = "rocket", topK = 1, candidateK = 1, hybridAlpha = 0.6, mode = "compare" }
+        })
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/collections/{collection.Id}/search");
+            request.Headers.Add("Origin", "http://127.0.0.1:5074");
+            request.Headers.Add("X-CSRF-TOKEN", token);
+            request.Content = JsonContent.Create(body);
+            var response = await client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+
+        using var foreign = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/collections/{collection.Id}/search");
+        foreign.Headers.Add("Origin", "http://127.0.0.1:5074");
+        foreign.Headers.Add("X-CSRF-TOKEN", token);
+        foreign.Content = JsonContent.Create(new { query = "rocket", topK = 1, candidateK = 1, hybridAlpha = 0.6, assetIds = new[] { Guid.NewGuid() } });
+        var foreignResponse = await client.SendAsync(foreign);
+        Assert.Equal(HttpStatusCode.Conflict, foreignResponse.StatusCode);
+        Assert.Equal("SEARCH_CONFLICT", (await foreignResponse.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("code").GetString());
+    }
+
     private static WebApplicationFactory<Program> CreateFactory()
     {
         var repo = FindRepositoryRoot();

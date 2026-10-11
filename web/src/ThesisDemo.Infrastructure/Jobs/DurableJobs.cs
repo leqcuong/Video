@@ -7,17 +7,35 @@ using ThesisDemo.Infrastructure.Persistence;
 
 namespace ThesisDemo.Infrastructure.Jobs;
 
-public enum JobState { Queued, Running, Succeeded, Failed, Interrupted, Canceled }
+public enum JobState { Queued, Running, Succeeded, Partial, Failed, Interrupted, Canceled }
 public sealed class DurableJob
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Kind { get; set; } = "processing";
+    public Guid CollectionId { get; set; }
+    public Guid RunId { get; set; }
+    public Guid? ParentJobId { get; set; }
+    public string RequestJson { get; set; } = "{}";
+    public string InputHash { get; set; } = "";
+    public string IdempotencyKey { get; set; } = Guid.NewGuid().ToString("N");
+    public string ProgressJson { get; set; } = "{}";
+    public string? ErrorCode { get; set; }
+    public bool CancelRequested { get; set; }
     public JobState State { get; set; } = JobState.Queued;
     public Guid? ClaimToken { get; set; }
     public DateTimeOffset CreatedUtc { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? ClaimedUtc { get; set; }
     public DateTimeOffset? EndedUtc { get; set; }
     public Guid Version { get; set; } = Guid.NewGuid();
+}
+
+public sealed class JobEvent
+{
+    public long Id { get; set; }
+    public Guid JobId { get; set; }
+    public DateTimeOffset OccurredUtc { get; set; } = DateTimeOffset.UtcNow;
+    public string Kind { get; set; } = "";
+    public string DetailJson { get; set; } = "{}";
 }
 
 public interface IDurableJobRepository
@@ -27,6 +45,9 @@ public interface IDurableJobRepository
     Task<IReadOnlyList<Guid>> ListQueuedAsync(CancellationToken ct);
     Task<Guid?> ClaimAsync(Guid id, CancellationToken ct);
     Task CompleteAsync(Guid id, Guid claimToken, bool succeeded, CancellationToken ct);
+    Task<bool> IsCancellationRequestedAsync(Guid id, CancellationToken ct);
+    Task RecordAsync(Guid id, string kind, string detailJson, CancellationToken ct);
+    Task FinishAsync(Guid id, Guid claimToken, JobState state, string? errorCode, CancellationToken ct);
 }
 
 public sealed class DurableJobRepository(IDbContextFactory<ThesisDemoDbContext> factory) : IDurableJobRepository
@@ -61,9 +82,33 @@ public sealed class DurableJobRepository(IDbContextFactory<ThesisDemoDbContext> 
     public async Task CompleteAsync(Guid id, Guid claimToken, bool succeeded, CancellationToken ct)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        if (!await db.Jobs.AnyAsync(x => x.Id == id && x.State == JobState.Running && x.ClaimToken == claimToken, ct)) return;
+        await FinishAsync(id, claimToken, succeeded ? JobState.Succeeded : JobState.Failed, null, ct);
+    }
+
+    public async Task<bool> IsCancellationRequestedAsync(Guid id, CancellationToken ct)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.Jobs.Where(x => x.Id == id).Select(x => x.CancelRequested).SingleAsync(ct);
+    }
+
+    public async Task RecordAsync(Guid id, string kind, string detailJson, CancellationToken ct)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        db.JobEvents.Add(new JobEvent { JobId = id, Kind = kind, DetailJson = detailJson });
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task FinishAsync(Guid id, Guid claimToken, JobState state, string? errorCode, CancellationToken ct)
+    {
+        if (state is not (JobState.Succeeded or JobState.Partial or JobState.Failed or JobState.Canceled))
+            throw new ArgumentOutOfRangeException(nameof(state));
+        await using var db = await factory.CreateDbContextAsync(ct);
         var job = await db.Jobs.SingleOrDefaultAsync(x => x.Id == id && x.State == JobState.Running && x.ClaimToken == claimToken, ct)
             ?? throw new InvalidOperationException("Stale or invalid job claim.");
-        job.State = succeeded ? JobState.Succeeded : JobState.Failed; job.EndedUtc = DateTimeOffset.UtcNow; job.Version = Guid.NewGuid();
+        job.State = job.CancelRequested ? JobState.Canceled : state;
+        job.ErrorCode = errorCode; job.EndedUtc = DateTimeOffset.UtcNow; job.Version = Guid.NewGuid();
+        db.JobEvents.Add(new JobEvent { JobId = id, Kind = "job_finished", DetailJson = System.Text.Json.JsonSerializer.Serialize(new { state = job.State.ToString(), errorCode }) });
         await db.SaveChangesAsync(ct);
     }
 }
@@ -108,9 +153,18 @@ public sealed class DurableJobWorker(IServiceScopeFactory scopes, JobDispatcher 
         try
         {
             await scope.ServiceProvider.GetRequiredService<IJobHandler>().ExecuteAsync(id, token.Value, ct);
-            await repository.CompleteAsync(id, token.Value, true, ct);
+            await repository.CompleteAsync(id, token.Value, true, CancellationToken.None);
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-        catch { await repository.CompleteAsync(id, token.Value, false, CancellationToken.None); }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            await repository.FinishAsync(id, token.Value, JobState.Canceled, "HOST_SHUTDOWN", CancellationToken.None);
+            throw;
+        }
+        catch (OperationCanceledException) { await repository.FinishAsync(id, token.Value, JobState.Canceled, "CANCELED", CancellationToken.None); }
+        catch (Exception ex)
+        {
+            await repository.RecordAsync(id, "job_error", System.Text.Json.JsonSerializer.Serialize(new { error = ex.Message }), CancellationToken.None);
+            await repository.FinishAsync(id, token.Value, JobState.Failed, "PROCESSING_FAILED", CancellationToken.None);
+        }
     }
 }

@@ -43,6 +43,30 @@ public sealed class MediaSegmentApiTests
 
         var missingThumbnail = await client.GetAsync($"/api/v1/segments/{segments.Items[0].Id}/thumbnail");
         Assert.Equal(HttpStatusCode.NotFound, missingThumbnail.StatusCode);
+
+        using var invalidRange = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/assets/{asset.Id}/media");
+        invalidRange.Headers.Range = new RangeHeaderValue(500, 700);
+        var invalidResponse = await client.SendAsync(invalidRange);
+        Assert.Equal(HttpStatusCode.RequestedRangeNotSatisfiable, invalidResponse.StatusCode);
+        Assert.Equal(16, invalidResponse.Content.Headers.ContentRange?.Length);
+
+        using var suffix = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/assets/{asset.Id}/media");
+        suffix.Headers.Range = new RangeHeaderValue(null, 4);
+        var suffixResponse = await client.SendAsync(suffix);
+        Assert.Equal(HttpStatusCode.PartialContent, suffixResponse.StatusCode);
+        var completeMedia = await client.GetByteArrayAsync($"/api/v1/assets/{asset.Id}/media");
+        Assert.Equal(completeMedia.TakeLast(4), await suffixResponse.Content.ReadAsByteArrayAsync());
+
+        using var ifRange = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/assets/{asset.Id}/media");
+        ifRange.Headers.Range = new RangeHeaderValue(0, 3);
+        ifRange.Headers.TryAddWithoutValidation("If-Range", "\"different-file\"");
+        var ifRangeResponse = await client.SendAsync(ifRange);
+        Assert.Equal(HttpStatusCode.OK, ifRangeResponse.StatusCode);
+        Assert.Equal(16, (await ifRangeResponse.Content.ReadAsByteArrayAsync()).Length);
+
+        var missing = await client.GetAsync($"/api/v1/assets/{Guid.NewGuid()}/media");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        Assert.Equal("ASSET_NOT_FOUND", (await missing.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("code").GetString());
     }
 
     private static WebApplicationFactory<Program> CreateFactory()

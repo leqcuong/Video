@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Dapper" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="..\ThesisDemo.Domain\ThesisDemo.Domain.csproj" />
     <ProjectReference Include="..\ThesisDemo.Application\ThesisDemo.Application.csproj" />

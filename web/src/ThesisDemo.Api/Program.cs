@@ -12,6 +12,7 @@ using ThesisDemo.Infrastructure.Jobs;
 using ThesisDemo.Infrastructure.Legacy;
 using ThesisDemo.Infrastructure.Persistence;
 using ThesisDemo.Infrastructure.Storage;
+using ThesisDemo.Infrastructure.Research;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls(LoopbackHost.Validate(builder.Configuration["Host:Url"]));
@@ -45,6 +46,10 @@ builder.Services.AddScoped<ICollectionStore, EfCollectionStore>();
 builder.Services.AddScoped<ILegacyCorpusImporter, LegacyCorpusImporter>();
 builder.Services.AddScoped<ISearchService, LegacySearchService>();
 builder.Services.AddSingleton<LocalMediaStore>();
+builder.Services.AddSingleton<ManagedStorage>();
+builder.Services.AddScoped<MediaUploadService>();
+builder.Services.AddScoped<ReportImporter>();
+builder.Services.AddScoped<EvaluationReadRepository>();
 builder.Services.AddScoped<IDurableJobRepository, DurableJobRepository>();
 builder.Services.AddSingleton<JobDispatcher>();
 builder.Services.AddSingleton<IJobDispatcher>(sp => sp.GetRequiredService<JobDispatcher>());

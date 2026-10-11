@@ -51,14 +51,12 @@ public sealed class SegmentsController(IDbContextFactory<ThesisDemoDbContext> fa
         return Ok(new PageResult<SegmentDto>(items, page, pageSize, total));
     }
 
-    private ActionResult NotFoundProblem(string code, string detail) =>
-        Problem(detail, statusCode: StatusCodes.Status404NotFound, title: "Not found", extensions: ProblemExtensions(code));
-
-    private Dictionary<string, object?> ProblemExtensions(string code) => new()
+    private ActionResult NotFoundProblem(string code, string detail)
     {
-        ["code"] = code,
-        ["traceId"] = HttpContext.TraceIdentifier
-    };
+        var result = Problem(detail, statusCode: StatusCodes.Status404NotFound, title: "Not found");
+        ((ProblemDetails)result.Value!).Extensions["code"] = code;
+        return result;
+    }
 
     private static string ModalityAvailability(string? transcript, string? ocr)
     {
@@ -89,15 +87,12 @@ public sealed class SegmentThumbnailsController(IDbContextFactory<ThesisDemoDbCo
         }
         catch (InvalidOperationException ex)
         {
-            return Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity, title: "Invalid thumbnail artifact", extensions: ProblemExtensions("INVALID_THUMBNAIL_ARTIFACT"));
+            var result = Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity, title: "Invalid thumbnail artifact");
+            ((ProblemDetails)result.Value!).Extensions["code"] = "INVALID_THUMBNAIL_ARTIFACT";
+            return result;
         }
         if (!System.IO.File.Exists(path)) return NotFound(new { code = "THUMBNAIL_FILE_MISSING", traceId = HttpContext.TraceIdentifier });
         return PhysicalFile(path, artifact.ContentType, enableRangeProcessing: false);
     }
 
-    private Dictionary<string, object?> ProblemExtensions(string code) => new()
-    {
-        ["code"] = code,
-        ["traceId"] = HttpContext.TraceIdentifier
-    };
 }

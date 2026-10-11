@@ -47,4 +47,12 @@ public sealed class ProcessingAssetAttempt : VersionedEntity
     public RunState State { get; private set; } = RunState.Queued;
     public string OutputRoot { get; private set; } = "";
     public string? ErrorCode { get; private set; }
+    public void Complete(RunState state, string? errorCode = null)
+    {
+        if (State != RunState.Queued || state is not (RunState.Succeeded or RunState.Failed))
+            throw new InvalidOperationException("Attempt is already completed or has invalid terminal state.");
+        State = state;
+        ErrorCode = errorCode;
+        Touch();
+    }
 }

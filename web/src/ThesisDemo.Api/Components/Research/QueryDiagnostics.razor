@@ -1,0 +1,66 @@
+@using System.Text.Json
+@using Microsoft.EntityFrameworkCore
+@using ThesisDemo.Infrastructure.Persistence
+@using ThesisDemo.Infrastructure.Research
+@using ThesisDemo.Api.Components.Playback
+@inject IDbContextFactory<ThesisDemoDbContext> Factory
+
+<h2 class="h5">Per-query diagnostics (@Data.Total)</h2>
+<div class="table-responsive">
+    <table class="table table-sm table-hover">
+        <thead><tr><th>#</th><th>Query</th><th>Outcome</th><th>Baseline rank</th><th>Reranked rank</th><th>Top-1 IoU (base / rerank)</th><th>Evidence</th></tr></thead>
+        <tbody>
+            @foreach (var row in Data.Items)
+            {
+                <tr>
+                    <td>@row.Ordinal</td><td>@row.Query</td><td>@row.Outcome</td><td>@(row.BaselineRank?.ToString() ?? "miss")</td><td>@(row.RerankedRank?.ToString() ?? "miss")</td>
+                    <td>@row.BaselineTop1Iou.ToString("0.000") / @row.RerankedTop1Iou.ToString("0.000")</td>
+                    <td><button class="btn btn-sm btn-outline-secondary" @onclick="() => SelectAsync(row)">Play</button></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+@if (_selection is not null)
+{
+    <div class="row g-3 border-top pt-3">
+        <section class="col-md-6">
+            <h3 class="h6">Expected interval</h3>
+            <p class="small">@_selection.Query</p>
+            <VideoPlayer MediaUrl="@_expectedMedia" StartSec="@_expectedStart" EndSec="@_expectedEnd" />
+        </section>
+        <section class="col-md-6">
+            <h3 class="h6">Recorded top retrieval</h3>
+            <p class="small">@_retrievedCaption</p>
+            <VideoPlayer MediaUrl="@_retrievedMedia" StartSec="@_retrievedStart" EndSec="@_retrievedEnd" />
+        </section>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public QueryPage Data { get; set; } = new([], 1, 25, 0);
+    private RecordedQuery? _selection;
+    private string? _expectedMedia, _retrievedMedia, _retrievedCaption;
+    private double _expectedStart, _expectedEnd, _retrievedStart, _retrievedEnd;
+    private async Task SelectAsync(RecordedQuery row)
+    {
+        _selection = row;
+        _expectedMedia = _retrievedMedia = null;
+        using var expected = JsonDocument.Parse(row.ExpectedJson);
+        using var retrieved = JsonDocument.Parse(row.RetrievedJson);
+        var first = expected.RootElement.ValueKind == JsonValueKind.Array ? expected.RootElement.EnumerateArray().FirstOrDefault() : default;
+        var top = retrieved.RootElement;
+        var expectedId = ReadString(first, "asset_id");
+        var retrievedId = ReadString(top, "assetId");
+        _expectedStart = ReadDouble(first, "start_sec"); _expectedEnd = ReadDouble(first, "end_sec");
+        _retrievedStart = ReadDouble(top, "startSec"); _retrievedEnd = ReadDouble(top, "endSec");
+        _retrievedCaption = ReadString(top, "caption");
+        await using var db = await Factory.CreateDbContextAsync();
+        var ids = new[] { expectedId, retrievedId }.Where(x => !string.IsNullOrEmpty(x)).ToArray();
+        var assets = await db.VideoAssets.AsNoTracking().Where(x => ids.Contains(x.LegacyAssetId)).ToListAsync();
+        _expectedMedia = assets.FirstOrDefault(x => x.LegacyAssetId == expectedId && x.MediaArtifactId != null) is { } a ? $"/api/v1/assets/{a.Id}/media" : null;
+        _retrievedMedia = assets.FirstOrDefault(x => x.LegacyAssetId == retrievedId && x.MediaArtifactId != null) is { } b ? $"/api/v1/assets/{b.Id}/media" : null;
+    }
+    private static string? ReadString(JsonElement e, string key) => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+    private static double ReadDouble(JsonElement e, string key) => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : 0;
+}

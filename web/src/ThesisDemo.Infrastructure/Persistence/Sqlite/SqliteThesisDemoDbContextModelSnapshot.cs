@@ -401,6 +401,91 @@ namespace ThesisDemo.Infrastructure.Persistence.Sqlite
 
                     b.ToTable("Jobs");
                 });
+
+            modelBuilder.Entity("ThesisDemo.Infrastructure.Research.RecordedEvaluation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("ImportedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProvenanceJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SummaryJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SourceId")
+                        .IsUnique();
+
+                    b.ToTable("RecordedEvaluations");
+                });
+
+            modelBuilder.Entity("ThesisDemo.Infrastructure.Research.RecordedQuery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("BaselineRank")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("BaselineTop1Iou")
+                        .HasColumnType("REAL");
+
+                    b.Property<Guid>("EvaluationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExpectedJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Query")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("RerankedRank")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("RerankedTop1Iou")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("RetrievedJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EvaluationId", "Ordinal")
+                        .IsUnique();
+
+                    b.ToTable("RecordedQueries");
+                });
 #pragma warning restore 612, 618
         }
     }

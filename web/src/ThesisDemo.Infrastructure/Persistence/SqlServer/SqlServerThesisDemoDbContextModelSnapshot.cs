@@ -438,6 +438,91 @@ namespace ThesisDemo.Infrastructure.Persistence.SqlServer
 
                     b.ToTable("Jobs");
                 });
+
+            modelBuilder.Entity("ThesisDemo.Infrastructure.Research.RecordedEvaluation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("ImportedUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ProvenanceJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SourceHash")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SourceId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("SummaryJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SourceId")
+                        .IsUnique();
+
+                    b.ToTable("RecordedEvaluations");
+                });
+
+            modelBuilder.Entity("ThesisDemo.Infrastructure.Research.RecordedQuery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("BaselineRank")
+                        .HasColumnType("int");
+
+                    b.Property<double>("BaselineTop1Iou")
+                        .HasColumnType("float");
+
+                    b.Property<Guid>("EvaluationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ExpectedJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Query")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("RerankedRank")
+                        .HasColumnType("int");
+
+                    b.Property<double>("RerankedTop1Iou")
+                        .HasColumnType("float");
+
+                    b.Property<string>("RetrievedJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EvaluationId", "Ordinal")
+                        .IsUnique();
+
+                    b.ToTable("RecordedQueries");
+                });
 #pragma warning restore 612, 618
         }
     }

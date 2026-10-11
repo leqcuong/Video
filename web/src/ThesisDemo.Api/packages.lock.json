@@ -243,6 +243,7 @@
       "thesisdemo.infrastructure": {
         "type": "Project",
         "dependencies": {
+          "Dapper": "[2.1.66, )",
           "Microsoft.EntityFrameworkCore": "[10.0.4, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.4, )",
           "Microsoft.EntityFrameworkCore.Sqlite": "[10.0.4, )",
@@ -250,6 +251,12 @@
           "ThesisDemo.Application": "[1.0.0, )",
           "ThesisDemo.Domain": "[1.0.0, )"
         }
+      },
+      "Dapper": {
+        "type": "CentralTransitive",
+        "requested": "[2.1.66, )",
+        "resolved": "2.1.66",
+        "contentHash": "/q77jUgDOS+bzkmk3Vy9SiWMaetTw+NOoPAV0xPBsGVAyljd5S6P+4RUW7R3ZUGGr9lDRyPKgAMj2UAOwvqZYw=="
       },
       "Microsoft.EntityFrameworkCore": {
         "type": "CentralTransitive",

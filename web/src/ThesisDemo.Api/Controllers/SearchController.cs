@@ -22,30 +22,31 @@ public sealed class SearchController(ISearchService search) : ControllerBase
         }
         catch (KeyNotFoundException)
         {
-            return Problem("Collection was not found.", statusCode: StatusCodes.Status404NotFound, title: "Not found", extensions: ProblemExtensions("COLLECTION_NOT_FOUND"));
+            return ProblemWithCode("COLLECTION_NOT_FOUND", "Collection was not found.", StatusCodes.Status404NotFound, "Not found");
         }
         catch (FileNotFoundException ex)
         {
-            return Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, title: "Index not ready", extensions: ProblemExtensions("INDEX_NOT_READY"));
+            return ProblemWithCode("INDEX_NOT_READY", ex.Message, StatusCodes.Status409Conflict, "Index not ready");
         }
         catch (PythonSearchException ex)
         {
             var status = ex.Code is "INDEX_NOT_LOADED" ? StatusCodes.Status409Conflict : StatusCodes.Status503ServiceUnavailable;
-            return Problem(ex.Message, statusCode: status, title: "Search worker failed", extensions: ProblemExtensions(ex.Code ?? "SEARCH_WORKER_FAILED"));
+            return ProblemWithCode(ex.Code ?? "SEARCH_WORKER_FAILED", ex.Message, status, "Search worker failed");
         }
         catch (TimeoutException ex)
         {
-            return Problem(ex.Message, statusCode: StatusCodes.Status504GatewayTimeout, title: "Search timed out", extensions: ProblemExtensions("SEARCH_TIMEOUT"));
+            return ProblemWithCode("SEARCH_TIMEOUT", ex.Message, StatusCodes.Status504GatewayTimeout, "Search timed out");
         }
         catch (InvalidOperationException ex)
         {
-            return Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, title: "Search conflict", extensions: ProblemExtensions("SEARCH_CONFLICT"));
+            return ProblemWithCode("SEARCH_CONFLICT", ex.Message, StatusCodes.Status409Conflict, "Search conflict");
         }
     }
 
-    private Dictionary<string, object?> ProblemExtensions(string code) => new()
+    private ObjectResult ProblemWithCode(string code, string detail, int statusCode, string title)
     {
-        ["code"] = code,
-        ["traceId"] = HttpContext.TraceIdentifier
-    };
+        var result = Problem(detail, statusCode: statusCode, title: title);
+        ((ProblemDetails)result.Value!).Extensions["code"] = code;
+        return result;
+    }
 }

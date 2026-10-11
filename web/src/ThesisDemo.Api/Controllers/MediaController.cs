@@ -8,7 +8,7 @@ namespace ThesisDemo.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/assets")]
-public sealed class MediaController(IDbContextFactory<ThesisDemoDbContext> factory, LocalMediaStore mediaStore) : ControllerBase
+public sealed class MediaController(IDbContextFactory<ThesisDemoDbContext> factory, LocalMediaStore mediaStore, ManagedStorage managed) : ControllerBase
 {
     [HttpGet("{id:guid}/media")]
     [HttpHead("{id:guid}/media")]
@@ -23,26 +23,28 @@ public sealed class MediaController(IDbContextFactory<ThesisDemoDbContext> facto
         string path;
         try
         {
-            path = mediaStore.ResolveRegisteredArtifactPath(artifact.RelativePath);
+            path = artifact.RelativePath.StartsWith("managed/", StringComparison.Ordinal)
+                ? managed.Resolve(artifact.RelativePath) : mediaStore.ResolveRegisteredArtifactPath(artifact.RelativePath);
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex) when (ex is InvalidOperationException or InvalidDataException)
         {
-            return Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity, title: "Invalid media artifact", extensions: ProblemExtensions("INVALID_MEDIA_ARTIFACT"));
+            return ProblemWithCode("INVALID_MEDIA_ARTIFACT", ex.Message, StatusCodes.Status422UnprocessableEntity, "Invalid media artifact");
         }
         var info = new FileInfo(path);
         if (!info.Exists) return NotFoundProblem("MEDIA_FILE_MISSING", "Media file is missing.");
 
-        Response.Headers.ETag = new EntityTagHeaderValue("\"" + artifact.Sha256 + "\"").ToString();
-        Response.Headers.LastModified = info.LastWriteTimeUtc.ToString("R");
-        return PhysicalFile(path, artifact.ContentType, enableRangeProcessing: true);
+        var etag = new EntityTagHeaderValue("\"" + artifact.Sha256 + "\"");
+        return PhysicalFile(path, artifact.ContentType, lastModified: info.LastWriteTimeUtc,
+            entityTag: etag, enableRangeProcessing: true);
     }
 
     private ActionResult NotFoundProblem(string code, string detail) =>
-        Problem(detail, statusCode: StatusCodes.Status404NotFound, title: "Not found", extensions: ProblemExtensions(code));
+        ProblemWithCode(code, detail, StatusCodes.Status404NotFound, "Not found");
 
-    private Dictionary<string, object?> ProblemExtensions(string code) => new()
+    private ObjectResult ProblemWithCode(string code, string detail, int statusCode, string title)
     {
-        ["code"] = code,
-        ["traceId"] = HttpContext.TraceIdentifier
-    };
+        var result = Problem(detail, statusCode: statusCode, title: title);
+        ((ProblemDetails)result.Value!).Extensions["code"] = code;
+        return result;
+    }
 }

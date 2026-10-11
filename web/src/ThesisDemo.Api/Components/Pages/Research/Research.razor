@@ -1,0 +1,99 @@
+@page "/research"
+@using System.Text.Json
+@using Microsoft.EntityFrameworkCore
+@using ThesisDemo.Infrastructure.Research
+@using ThesisDemo.Infrastructure.Persistence
+@using ThesisDemo.Api.Components.Research
+@inject OperationScope Operations
+
+<PageTitle>Recorded Research</PageTitle>
+<h1 class="h3">Recorded research evidence</h1>
+<p class="text-secondary small">Immutable full-rerun reports. Historical counts and label provenance are reported as recorded, without interpreting automated labels as human ground truth.</p>
+@if (_error is not null) { <div class="alert alert-warning">@_error</div> }
+<div class="d-flex flex-wrap align-items-end gap-3 mb-3">
+    <label>Track / report
+        <select class="form-select" @bind="_selectedId" @bind:after="LoadSelectionAsync">
+            @foreach (var report in _reports) { <option value="@report.Id">@ReportName(report.Kind)</option> }
+        </select>
+    </label>
+    @if (_selected is not null)
+    {
+        <span class="small text-secondary">SHA-256: <code>@_selected.SourceHash[..12]</code>... | imported @_selected.ImportedUtc.ToString("u")</span>
+    }
+</div>
+@if (_selected is not null)
+{
+    <h2 class="h5">@ReportName(_selected.Kind)</h2>
+    <div class="table-responsive">
+        <table class="table table-sm"><tbody>
+            @foreach (var metric in Metrics(_selected.SummaryJson))
+            { <tr><th scope="row" style="width:240px">@metric.Key</th><td>@metric.Value</td></tr> }
+        </tbody></table>
+    </div>
+    <p class="small text-secondary">@_selected.ProvenanceJson</p>
+    <div class="d-flex gap-2 mb-3">
+        @foreach (var artifact in _artifacts)
+        { <a class="btn btn-sm btn-outline-primary" href="@($"/api/v1/artifacts/{artifact.Id}/download")">Download @artifact.Kind.Replace("recorded-summary-", "").ToUpperInvariant()</a> }
+    </div>
+    @if (_selected.Kind == "retrieval_significance")
+    { <SignificanceView SummaryJson="@_selected.SummaryJson" /> }
+    @if (_selected.Kind is "report" or "reranker_comparison_report")
+    {
+        <div class="d-flex gap-2 align-items-end mb-3">
+            <label>Outcome <select class="form-select" @bind="_outcome" @bind:after="ResetAndLoadAsync"><option value="">All</option>@if (_selected.Kind == "report") { <option value="success">Hit</option><option value="failure">Miss</option> } else { <option value="improved">Improved</option><option value="worsened">Worsened</option><option value="unchanged">Unchanged</option> }</select></label>
+            <button class="btn btn-outline-secondary" disabled="@(_page == 1)" @onclick="PreviousAsync">Previous</button>
+            <span>Page @_page</span><button class="btn btn-outline-secondary" disabled="@(_page * 25 >= _queries.Total)" @onclick="NextAsync">Next</button>
+        </div>
+        <QueryDiagnostics Data="@_queries" />
+    }
+}
+
+@code {
+    private IReadOnlyList<RecordedEvaluation> _reports = [];
+    private RecordedEvaluation? _selected;
+    private Guid _selectedId;
+    private QueryPage _queries = new([], 1, 25, 0);
+    private int _page = 1;
+    private string _outcome = "";
+    private string? _error;
+    private List<(Guid Id, string Kind)> _artifacts = [];
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _reports = await Operations.ExecuteAsync((services, ct) => services.GetRequiredService<ReportImporter>().EnsureImportedAsync(ct));
+            _selectedId = _reports.FirstOrDefault(x => x.Kind == "report")?.Id ?? _reports.FirstOrDefault()?.Id ?? Guid.Empty;
+            await LoadSelectionAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+    private async Task LoadSelectionAsync()
+    {
+        _selected = _reports.FirstOrDefault(x => x.Id == _selectedId);
+        _page = 1;
+        _outcome = "";
+        if (_selected is null) return;
+        _artifacts = await Operations.ExecuteAsync(async (services, ct) =>
+        {
+            var factory = services.GetRequiredService<IDbContextFactory<ThesisDemoDbContext>>();
+            await using var db = await factory.CreateDbContextAsync(ct);
+            return await db.Artifacts.AsNoTracking().Where(x => x.RelativePath.StartsWith($"managed/exports/{_selectedId:N}/"))
+                .Select(x => new { x.Id, x.Kind }).ToListAsync(ct).ContinueWith(t => t.Result.Select(x => (x.Id, x.Kind)).ToList(), ct);
+        });
+        await LoadQueriesAsync();
+    }
+    private async Task LoadQueriesAsync()
+    {
+        if (_selected?.Kind is "report" or "reranker_comparison_report")
+            _queries = await Operations.ExecuteAsync((services, ct) => services.GetRequiredService<EvaluationReadRepository>().GetQueriesAsync(_selected.Id, string.IsNullOrEmpty(_outcome) ? null : _outcome, _page, 25, ct));
+    }
+    private async Task ResetAndLoadAsync() { _page = 1; await LoadQueriesAsync(); }
+    private async Task PreviousAsync() { _page--; await LoadQueriesAsync(); }
+    private async Task NextAsync() { _page++; await LoadQueriesAsync(); }
+    private static string ReportName(string kind) => kind switch { "segmentation_report" => "Track A - Segmentation", "caption_quality_report" => "Track B - Caption quality", "report" => "Track C - Retrieval", "reranker_comparison_report" => "Track C - Reranker comparison", "retrieval_significance" => "Track C - Significance", _ => kind };
+    private static IEnumerable<KeyValuePair<string, string>> Metrics(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.EnumerateObject().Select(x => new KeyValuePair<string, string>(x.Name, x.Value.ToString().Length > 500 ? "See export for details" : x.Value.ToString())).ToArray();
+    }
+}

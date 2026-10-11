@@ -35,7 +35,7 @@ public sealed class CollectionsController(CollectionHandlers collections, Collec
     public async Task<ActionResult<CollectionDto>> Update(Guid id, [FromBody] UpdateCollectionCommand command, CancellationToken ct)
     {
         if (!Request.Headers.TryGetValue("If-Match", out var ifMatch) || string.IsNullOrWhiteSpace(ifMatch))
-            return Problem("If-Match is required.", statusCode: StatusCodes.Status428PreconditionRequired, title: "Precondition required", extensions: ProblemExtensions("PRECONDITION_REQUIRED"));
+            return ProblemWithCode("PRECONDITION_REQUIRED", "If-Match is required.", StatusCodes.Status428PreconditionRequired, "Precondition required");
         try
         {
             var collection = await collections.UpdateAsync(id, command with { IfMatch = ifMatch.ToString() }, ct);
@@ -44,7 +44,7 @@ public sealed class CollectionsController(CollectionHandlers collections, Collec
         }
         catch (DbUpdateConcurrencyException)
         {
-            return Problem("The collection has changed.", statusCode: StatusCodes.Status412PreconditionFailed, title: "Precondition failed", extensions: ProblemExtensions("STALE_VERSION"));
+            return ProblemWithCode("STALE_VERSION", "The collection has changed.", StatusCodes.Status412PreconditionFailed, "Precondition failed");
         }
         catch (KeyNotFoundException)
         {
@@ -67,11 +67,11 @@ public sealed class CollectionsController(CollectionHandlers collections, Collec
         }
         catch (InvalidOperationException ex)
         {
-            return Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, title: "Import conflict", extensions: ProblemExtensions("IMPORT_CONFLICT"));
+            return ProblemWithCode("IMPORT_CONFLICT", ex.Message, StatusCodes.Status409Conflict, "Import conflict");
         }
         catch (ArgumentException ex)
         {
-            return Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest, title: "Invalid import request", extensions: ProblemExtensions("INVALID_IMPORT_REQUEST"));
+            return ProblemWithCode("INVALID_IMPORT_REQUEST", ex.Message, StatusCodes.Status400BadRequest, "Invalid import request");
         }
     }
 
@@ -80,7 +80,7 @@ public sealed class CollectionsController(CollectionHandlers collections, Collec
         [FromQuery] string? state = null, [FromQuery] string? name = null, CancellationToken ct = default)
     {
         if (!string.IsNullOrWhiteSpace(state) && !Enum.TryParse<ThesisDemo.Domain.Library.AssetState>(state, true, out _))
-            return Problem("Unsupported asset state.", statusCode: StatusCodes.Status400BadRequest, title: "Invalid filter", extensions: ProblemExtensions("INVALID_ASSET_STATE"));
+            return ProblemWithCode("INVALID_ASSET_STATE", "Unsupported asset state.", StatusCodes.Status400BadRequest, "Invalid filter");
         var parsedState = string.IsNullOrWhiteSpace(state)
             ? (ThesisDemo.Domain.Library.AssetState?)null
             : Enum.Parse<ThesisDemo.Domain.Library.AssetState>(state, true);
@@ -95,13 +95,14 @@ public sealed class CollectionsController(CollectionHandlers collections, Collec
     }
 
     private ActionResult NotFoundProblem(string code, string detail) =>
-        Problem(detail, statusCode: StatusCodes.Status404NotFound, title: "Not found", extensions: ProblemExtensions(code));
+        ProblemWithCode(code, detail, StatusCodes.Status404NotFound, "Not found");
 
-    private Dictionary<string, object?> ProblemExtensions(string code) => new()
+    private ObjectResult ProblemWithCode(string code, string detail, int statusCode, string title)
     {
-        ["code"] = code,
-        ["traceId"] = HttpContext.TraceIdentifier
-    };
+        var result = Problem(detail, statusCode: statusCode, title: title);
+        ((ProblemDetails)result.Value!).Extensions["code"] = code;
+        return result;
+    }
 
     private static string Quote(string value) => "\"" + value + "\"";
 }

@@ -1,7 +1,9 @@
 # Thesis Demo Web Development Pack
 
-Status: Phase 1 foundation implemented. Import, search, processing, research and
-Colab workflows are scheduled in later phases.
+Status: Phases 1-3 (foundation, prepared-corpus import, search/comparison/playback)
+are implemented with automated fixture coverage. Live processing, recorded research
+views and Colab workflows remain scheduled in later phases. Historical full-corpus
+parity and real reranker compatibility are not yet acceptance-verified.
 
 Run the foundation host on Windows:
 
@@ -15,6 +17,21 @@ Open http://127.0.0.1:5074/ and check `/api/v1/system/health`. The host applies
 the SQLite migrations on startup. Set `Database__Provider=SqlServer` and a trusted
 `ConnectionStrings__SqlServer` value to exercise the SQL Server profile.
 Run `web/scripts/check-environment.ps1` or `.sh` before enabling pipeline work.
+
+To build and run the Phase 1-3 unit, architecture, integration and Playwright
+browser suites on Windows (including SQL Server LocalDB concurrency):
+
+~~~powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File web/scripts/verify-phases-1-3.ps1 -IncludeLocalDb
+~~~
+
+Omit `-IncludeLocalDb` if SQL Server LocalDB is unavailable; that skips exercising
+its concurrency path. The script writes TRX test outcomes, Cobertura coverage,
+build/test logs and a matrix of remaining verification gaps under
+`web/artifacts/verification/phase123-<timestamp>/`. It captures desktop/mobile
+browser screenshots in `web/artifacts/verification/screenshots/`. Playwright
+Chromium must be installed for the browser tests (use the test project's
+`playwright.ps1 install chromium` bootstrap after building if needed).
 
 Start with [the product specification](../specs/001-thesis-demo/spec.md), then
 [the implementation plan](../specs/001-thesis-demo/plan.md) and
