@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ThesisDemo.Application\ThesisDemo.Application.csproj" />
+    <ProjectReference Include="..\ThesisDemo.Infrastructure\ThesisDemo.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

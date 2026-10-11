@@ -1,10 +1,10 @@
 # Thesis Demo Web
 
-This repository contains the planned .NET website for the video timeline analysis
+This repository contains the .NET website foundation for the video timeline analysis
 thesis demo and its development specifications. The website runs on a laptop; an
 interactive Google Colab notebook is planned for optional GPU processing.
 
-The application has not been implemented yet. Start with the
+Phase 1 is complete; application workflows are scheduled in later phases. Start with the
 [web project overview](web/README.md), [product specification](specs/001-thesis-demo/spec.md),
 [implementation plan](specs/001-thesis-demo/plan.md), and
 [task backlog](specs/001-thesis-demo/tasks.md).

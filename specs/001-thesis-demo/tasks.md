@@ -11,14 +11,14 @@ cases must pass before its task group is complete.
 
 ## Phase 1: Setup and Foundation (M0)
 
-- [ ] T001 Create web/ThesisDemo.sln and the four projects under web/src/ThesisDemo.{Domain,Application,Infrastructure,Api}; pin .NET 10 in web/global.json and packages in web/Directory.Packages.props. Confirm x64 Python choice; record package locks.
-- [ ] T002 [P] Create web/tests/ThesisDemo.ArchitectureTests/DependencyRulesTests.cs and test project scaffolds; enforce Domain/Application boundaries and forbidden dependencies.
-- [ ] T003 Implement provider selection, EF mappings and separate migrations under web/src/ThesisDemo.Infrastructure/Persistence/{SqlServer,Sqlite}; verify both concurrency-token strategies.
-- [ ] T004 [P] Add web/scripts/check-environment.ps1 and check-environment.sh for SDK, Python path/bitness, FFmpeg, models, device, disk and source-root readiness.
-- [ ] T005 Implement collection/asset/run/snapshot entities and state transitions in web/src/ThesisDemo.Domain/{Library,Processing,Search}; add focused invariant tests in web/tests/ThesisDemo.UnitTests.
-- [ ] T006 Implement immutable Artifact/Provenance models and hash/path validation in web/src/ThesisDemo.Infrastructure/Storage and Application/Artifacts.
-- [ ] T007 Implement durable job repository, bounded Channel<Guid>, dispatcher and scoped BackgroundService in web/src/ThesisDemo.Infrastructure/Jobs; include claim tokens and recovery behavior.
-- [ ] T008 Implement API v1 routing, DTO validation, ProblemDetails, trace IDs, loopback config and antiforgery bootstrap in web/src/ThesisDemo.Api/{Controllers,Middleware}; configure Blazor per-operation handler scopes.
+- [x] T001 Create web/ThesisDemo.sln and the four projects under web/src/ThesisDemo.{Domain,Application,Infrastructure,Api}; pin .NET 10 in web/global.json and packages in web/Directory.Packages.props. Confirm x64 Python choice; record package locks.
+- [x] T002 [P] Create web/tests/ThesisDemo.ArchitectureTests/DependencyRulesTests.cs and test project scaffolds; enforce Domain/Application boundaries and forbidden dependencies.
+- [x] T003 Implement provider selection, EF mappings and separate migrations under web/src/ThesisDemo.Infrastructure/Persistence/{SqlServer,Sqlite}; verify both concurrency-token strategies.
+- [x] T004 [P] Add web/scripts/check-environment.ps1 and check-environment.sh for SDK, Python path/bitness, FFmpeg, models, device, disk and source-root readiness.
+- [x] T005 Implement collection/asset/run/snapshot entities and state transitions in web/src/ThesisDemo.Domain/{Library,Processing,Search}; add focused invariant tests in web/tests/ThesisDemo.UnitTests.
+- [x] T006 Implement immutable Artifact/Provenance models and hash/path validation in web/src/ThesisDemo.Infrastructure/Storage and Application/Artifacts.
+- [x] T007 Implement durable job repository, bounded Channel<Guid>, dispatcher and scoped BackgroundService in web/src/ThesisDemo.Infrastructure/Jobs; include claim tokens and recovery behavior.
+- [x] T008 Implement API v1 routing, DTO validation, ProblemDetails, trace IDs, loopback config and antiforgery bootstrap in web/src/ThesisDemo.Api/{Controllers,Middleware}; configure Blazor per-operation handler scopes.
 
 Dependencies: T001 first; T002/T004 may proceed after solution paths exist.
 T005 precedes final T003 mappings; T006/T007 follow entity/persistence foundation.

@@ -1,0 +1,14 @@
+@page "/"
+@using ThesisDemo.Api.Components
+@inject OperationScope Operations
+
+<PageTitle>Thesis Demo</PageTitle>
+<h1>Video Timeline Analysis</h1>
+<p>Collections: @_collectionCount</p>
+
+@code {
+    private int _collectionCount;
+    protected override async Task OnInitializedAsync() =>
+        _collectionCount = await Operations.ExecuteAsync((services, ct) =>
+            services.GetRequiredService<CollectionOverview>().CountAsync(ct));
+}

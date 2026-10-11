@@ -1,6 +1,20 @@
 # Thesis Demo Web Development Pack
 
-Status: development documents prepared; the new .NET application is not implemented.
+Status: Phase 1 foundation implemented. Import, search, processing, research and
+Colab workflows are scheduled in later phases.
+
+Run the foundation host on Windows:
+
+~~~powershell
+$env:PATH = "$env:LOCALAPPDATA\Microsoft\dotnet;$env:PATH"
+dotnet restore web/ThesisDemo.sln --locked-mode
+dotnet run --project web/src/ThesisDemo.Api
+~~~
+
+Open http://127.0.0.1:5074/ and check `/api/v1/system/health`. The host applies
+the SQLite migrations on startup. Set `Database__Provider=SqlServer` and a trusted
+`ConnectionStrings__SqlServer` value to exercise the SQL Server profile.
+Run `web/scripts/check-environment.ps1` or `.sh` before enabling pipeline work.
 
 Start with [the product specification](../specs/001-thesis-demo/spec.md), then
 [the implementation plan](../specs/001-thesis-demo/plan.md) and
@@ -40,8 +54,10 @@ distinct assets, verified on 2026-10-10. The raw benchmark contains 3,500 querie
 the cleaned benchmark contains 3,486. The application must report actual imported
 counts while retaining the historical paper context.
 
-The locally discovered SDK is .NET 9.0.102; .NET 10 must be installed for this plan.
-The default Python found on PATH is 32-bit Python 3.13; implementation must select
-a compatible 64-bit ML environment explicitly. No SDKs or models were installed
-while preparing these documents.
+The foundation is pinned to .NET SDK 10.0.401, installed locally under
+`%LOCALAPPDATA%\Microsoft\dotnet` on this laptop. `C:\Python313\python.exe` is
+64-bit; the default `python` command still resolves to a 32-bit interpreter, so
+select the 64-bit path explicitly. FFmpeg and the expected local model directory
+are not ready on this laptop as of 2026-10-11. See
+[Phase 1 evidence](../specs/001-thesis-demo/phase1-evidence.md).
 
