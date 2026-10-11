@@ -8,7 +8,7 @@ using ThesisDemo.Infrastructure.Jobs;
 using ThesisDemo.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.WebHost.UseUrls(builder.Configuration["Host:Url"] ?? "http://127.0.0.1:5074");
+builder.WebHost.UseUrls(LoopbackHost.Validate(builder.Configuration["Host:Url"]));
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddControllersWithViews().ConfigureApiBehaviorOptions(options => options.InvalidModelStateResponseFactory = context =>
 {

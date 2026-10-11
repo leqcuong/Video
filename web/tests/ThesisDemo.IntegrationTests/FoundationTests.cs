@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using ThesisDemo.Api.Middleware;
 using ThesisDemo.Domain.Library;
 using ThesisDemo.Infrastructure.Jobs;
 using ThesisDemo.Infrastructure.Persistence;
@@ -11,6 +12,13 @@ namespace ThesisDemo.IntegrationTests;
 
 public sealed class FoundationTests
 {
+    [Fact]
+    public void Public_interface_binding_is_rejected()
+    {
+        Assert.Throws<InvalidOperationException>(() => LoopbackHost.Validate("http://0.0.0.0:5074"));
+        Assert.Equal("http://127.0.0.1:5074", LoopbackHost.Validate("http://127.0.0.1:5074"));
+    }
+
     [Fact]
     public async Task SqlServer_rowversion_concurrency_works_when_localdb_available()
     {
