@@ -17,8 +17,10 @@ public sealed class LegacySearchService(
         SearchValidation.Validate(request);
         var started = Stopwatch.StartNew();
         await using var db = await factory.CreateDbContextAsync(ct);
-        var collectionExists = await db.Collections.AsNoTracking().AnyAsync(x => x.Id == collectionId, ct);
-        if (!collectionExists) throw new KeyNotFoundException("Collection was not found.");
+        var collection = await db.Collections.AsNoTracking().SingleOrDefaultAsync(x => x.Id == collectionId, ct)
+            ?? throw new KeyNotFoundException("Collection was not found.");
+        if (request.Mode != SearchMode.Baseline)
+            throw new InvalidOperationException("Live reranking is not available. Recorded Track C comparisons are available in Research.");
 
         var assetFilter = request.AssetIds?.Where(x => x != Guid.Empty).Distinct().ToArray() ?? [];
         if (assetFilter.Length > 0)
@@ -28,16 +30,38 @@ public sealed class LegacySearchService(
             if (scoped != assetFilter.Length) throw new InvalidOperationException("Asset filter contains assets outside the collection.");
         }
 
-        var source = mediaStore.GetSource(configuration["Legacy:SearchSourceId"] ?? mediaStore.ListSources().First().Id);
-        var indexPath = Path.Combine(source.ArtifactRoot, "index", "combined_index.json");
+        var selectedId = request.IndexId ?? collection.ActiveIndexId;
+        Dictionary<Guid, Guid>? memberSets = null;
+        string indexPath;
+        if (selectedId.HasValue)
+        {
+            var snapshot = await db.IndexSnapshots.AsNoTracking().SingleOrDefaultAsync(
+                x => x.Id == selectedId.Value && x.CollectionId == collectionId, ct)
+                ?? throw new InvalidOperationException("Selected index is not part of this collection.");
+            if (snapshot.State != ThesisDemo.Domain.Search.SnapshotState.Ready || !snapshot.ArtifactId.HasValue)
+                throw new InvalidOperationException("Selected index is not ready.");
+            var artifact = await db.Artifacts.AsNoTracking().SingleAsync(x => x.Id == snapshot.ArtifactId.Value, ct);
+            indexPath = artifact.RelativePath.StartsWith("managed/", StringComparison.Ordinal)
+                ? new ManagedStorage(configuration).Resolve(artifact.RelativePath)
+                : throw new InvalidOperationException("Selected index artifact is not registered in managed storage.");
+            memberSets = await db.IndexMembers.AsNoTracking().Where(x => x.IndexId == selectedId.Value)
+                .ToDictionaryAsync(x => x.AssetId, x => x.SegmentSetId, ct);
+        }
+        else
+        {
+            var source = mediaStore.GetSource(configuration["Legacy:SearchSourceId"] ?? mediaStore.ListSources().First().Id);
+            indexPath = Path.Combine(source.ArtifactRoot, "index", "combined_index.json");
+        }
         if (!File.Exists(indexPath)) throw new FileNotFoundException("Registered legacy search index was not found.", indexPath);
 
         var legacyAssetScope = assetFilter.Length == 0
             ? []
             : await db.VideoAssets.AsNoTracking()
                 .Where(x => assetFilter.Contains(x.Id))
-                .Select(x => x.LegacyAssetId)
+                .Select(x => new { x.LegacyAssetId, x.Id })
                 .ToArrayAsync(ct);
+        var workerScope = legacyAssetScope.SelectMany(x => new[] { x.LegacyAssetId, x.Id.ToString("N") }).ToArray();
+        var workerIndexId = selectedId?.ToString("D") ?? "legacy-current";
 
         var workerOptions = new PythonSearchProcessOptions(
             PythonExecutable: configuration["Legacy:PythonExecutable"] ?? ResolvePython(),
@@ -47,23 +71,12 @@ public sealed class LegacySearchService(
             RestartTimeout: TimeSpan.FromSeconds(5));
         await using var process = new PythonSearchProcess(workerOptions);
         await process.StartAsync(ct);
-        await process.LoadIndexAsync(request.IndexId?.ToString("D") ?? "legacy-current", indexPath, ct);
+        await process.LoadIndexAsync(workerIndexId, indexPath, ct);
         await process.WarmAsync(ct);
-        var response = await process.SearchAsync(request.IndexId?.ToString("D") ?? "legacy-current",
-            request.Query.Trim(), request.TopK, request.CandidateK, request.HybridAlpha, legacyAssetScope, ct);
+        var response = await process.SearchAsync(workerIndexId,
+            request.Query.Trim(), request.TopK, request.CandidateK, request.HybridAlpha, workerScope, ct);
 
-        var baseline = await MapResultsAsync(db, collectionId, response.BaselineResults ?? [], baselineRanks: null, ct);
-        IReadOnlyList<SearchResultDto>? reranked = null;
-        if (request.Mode == SearchMode.Compare)
-        {
-            var ranks = baseline.ToDictionary(x => (x.LegacyAssetId, x.LegacySegmentId), x => x.Rank);
-            reranked = baseline.Select(x => x with { ScoreKind = "reranker", BaselineRank = ranks[(x.LegacyAssetId, x.LegacySegmentId)] }).ToList();
-        }
-        else if (request.Mode == SearchMode.Reranked)
-        {
-            reranked = baseline.Select(x => x with { ScoreKind = "reranker" }).ToList();
-            baseline = null;
-        }
+        var baseline = await MapResultsAsync(db, collectionId, response.BaselineResults ?? [], memberSets, ct);
 
         started.Stop();
         return new SearchResponse(response.RequestId, response.IndexId, request.ModelId,
@@ -73,23 +86,27 @@ public sealed class LegacySearchService(
             response.ElapsedMs ?? started.ElapsedMilliseconds,
             response.Warnings ?? [],
             baseline,
-            reranked);
+            null);
     }
 
     private static async Task<IReadOnlyList<SearchResultDto>> MapResultsAsync(ThesisDemoDbContext db, Guid collectionId,
-        IReadOnlyList<SearchWorkerResult> rows, IReadOnlyDictionary<(string AssetId, string SegmentId), int>? baselineRanks, CancellationToken ct)
+        IReadOnlyList<SearchWorkerResult> rows, IReadOnlyDictionary<Guid, Guid>? memberSets, CancellationToken ct)
     {
         var legacyAssetIds = rows.Select(x => x.AssetId).Distinct().ToArray();
         var assets = await db.VideoAssets.AsNoTracking()
-            .Where(x => x.CollectionId == collectionId && legacyAssetIds.Contains(x.LegacyAssetId))
-            .ToDictionaryAsync(x => x.LegacyAssetId, ct);
-        var assetIds = assets.Values.Select(x => x.Id).ToArray();
+            .Where(x => x.CollectionId == collectionId)
+            .ToListAsync(ct);
+        var byWorkerId = assets.SelectMany(x => new[] { (Key: x.LegacyAssetId, Asset: x), (Key: x.Id.ToString("N"), Asset: x) })
+            .GroupBy(x => x.Key, StringComparer.Ordinal).ToDictionary(x => x.Key, x => x.First().Asset, StringComparer.Ordinal);
+        var matched = legacyAssetIds.Where(byWorkerId.ContainsKey).Select(x => byWorkerId[x]).DistinctBy(x => x.Id).ToArray();
+        var assetIds = matched.Select(x => x.Id).ToArray();
         var segmentSets = await db.SegmentSets.AsNoTracking()
             .Where(x => assetIds.Contains(x.AssetId))
             .Select(x => new { x.Id, x.AssetId, x.CreatedUtc })
             .ToListAsync(ct);
-        var latestSetByAsset = segmentSets.GroupBy(x => x.AssetId)
-            .ToDictionary(x => x.Key, x => x.OrderByDescending(s => s.CreatedUtc).First().Id);
+        var latestSetByAsset = memberSets is null
+            ? segmentSets.GroupBy(x => x.AssetId).ToDictionary(x => x.Key, x => x.OrderByDescending(s => s.CreatedUtc).First().Id)
+            : memberSets.Where(x => assetIds.Contains(x.Key)).ToDictionary(x => x.Key, x => x.Value);
         var setIds = latestSetByAsset.Values.ToArray();
         var segments = await db.VideoSegments.AsNoTracking()
             .Where(x => setIds.Contains(x.SegmentSetId))
@@ -99,14 +116,14 @@ public sealed class LegacySearchService(
         var rank = 1;
         foreach (var row in rows)
         {
-            if (!assets.TryGetValue(row.AssetId, out var asset)) continue;
+            if (!byWorkerId.TryGetValue(row.AssetId, out var asset)) continue;
             if (!latestSetByAsset.TryGetValue(asset.Id, out var setId)) continue;
             if (!segmentsBySetAndLegacy.TryGetValue((setId, row.SegmentId), out var segment)) continue;
             mapped.Add(new SearchResultDto(rank++, segment.Id, asset.Id, asset.LegacyAssetId, segment.LegacySegmentId,
                 segment.StartSec, segment.EndSec, segment.Caption, segment.TranscriptText, segment.OcrText,
                 row.Score, row.ScoreKind, $"/api/v1/assets/{asset.Id}/media",
                 segment.ThumbnailArtifactId.HasValue ? $"/api/v1/segments/{segment.Id}/thumbnail" : null,
-                baselineRanks?.GetValueOrDefault((asset.LegacyAssetId, segment.LegacySegmentId))));
+                null));
         }
         return mapped;
     }

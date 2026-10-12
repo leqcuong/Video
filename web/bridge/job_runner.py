@@ -48,7 +48,15 @@ def main():
     for asset_id, legacy_id in request["assets"].items():
         if legacy_id not in observed:
             emit("asset_failed", assetId=asset_id, errorCode="MISSING_MANIFEST_ENTRY")
-    emit("job_finished", exitCode=process.returncode, completedAssets=len(observed))
+    summary = {}
+    try:
+        logged = Path(request["log"]).read_text(encoding="utf-8")
+        summary = json.loads(logged[logged.rfind("\n{") + 1:].strip())
+    except (ValueError, OSError):
+        pass
+    emit("job_finished", exitCode=process.returncode, completedAssets=len(observed),
+         embeddingBackend=summary.get("embedding_backend", "unknown"),
+         embeddingModel=summary.get("embedding_model", "unknown"))
 
 
 def read_manifest(path, assets, observed):

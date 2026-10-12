@@ -2,7 +2,6 @@
 @using ThesisDemo.Application.Collections
 @using ThesisDemo.Application.Search
 @using ThesisDemo.Api.Components.Playback
-@using ThesisDemo.Api.Components.Search
 @inject OperationScope Operations
 
 <PageTitle>Search</PageTitle>
@@ -37,20 +36,7 @@
             </label>
         </div>
 
-        <div class="btn-group mt-3" role="group" aria-label="Search mode">
-            <input type="radio" class="btn-check" name="mode" id="mode-baseline" checked="@(_mode == SearchMode.Baseline)" @onchange="() => _mode = SearchMode.Baseline" />
-            <label class="btn btn-outline-primary" for="mode-baseline">Baseline</label>
-            <input type="radio" class="btn-check" name="mode" id="mode-compare" checked="@(_mode == SearchMode.Compare)" @onchange="() => _mode = SearchMode.Compare" />
-            <label class="btn btn-outline-primary" for="mode-compare">Compare</label>
-        </div>
-
-        @if (_mode != SearchMode.Baseline)
-        {
-            <div class="mt-3">
-                <label class="form-label" for="model">Model</label>
-                <input id="model" class="form-control" @bind="_modelId" />
-            </div>
-        }
+        <p class="small text-muted mt-3 mb-0">Live reranking is not available. Recorded Track C comparisons are in Research.</p>
 
         <div class="d-flex gap-2 mt-3">
             <button class="btn btn-primary" @onclick="RunSearchAsync" disabled="@(!_collectionId.HasValue || _busy)">Search</button>
@@ -69,11 +55,7 @@
             <div class="alert alert-warning py-2">@string.Join(" ", _response.Warnings)</div>
         }
 
-        @if (_mode == SearchMode.Compare && _response is not null)
-        {
-            <ComparisonView BaselineResults="@_response.BaselineResults" RerankedResults="@_response.RerankedResults" Selected="SelectResult" />
-        }
-        else if (_results.Count == 0)
+        @if (_results.Count == 0)
         {
             <div class="segment-list__empty">No results</div>
         }
@@ -107,8 +89,6 @@
     private int _topK = 10;
     private int _candidateK = 200;
     private double _alpha = 0.6;
-    private SearchMode _mode = SearchMode.Baseline;
-    private string _modelId = "lexical-fallback";
     private SearchResponse? _response;
     private List<SearchResultDto> _results = [];
     private SearchResultDto? _selected;
@@ -137,7 +117,7 @@
         try
         {
             var request = new SearchRequest(_query, TopK: _topK, CandidateK: _candidateK, HybridAlpha: _alpha,
-                Mode: _mode, ModelId: _mode == SearchMode.Baseline ? null : _modelId);
+                Mode: SearchMode.Baseline);
             _response = await Operations.ExecuteAsync((services, ct) =>
                 services.GetRequiredService<ISearchService>().SearchAsync(_collectionId.Value, request, ct), _cts.Token);
             _results = (_response.RerankedResults ?? _response.BaselineResults ?? []).ToList();

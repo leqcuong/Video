@@ -37,7 +37,10 @@ public sealed class SearchApiTests
         Assert.NotEqual(Guid.Empty, first.AssetId);
         Assert.NotEqual(Guid.Empty, first.SegmentId);
 
-        var compare = await PostSearchAsync(client, token, collection.Id, new
+        using var compareRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/collections/{collection.Id}/search");
+        compareRequest.Headers.Add("Origin", "http://127.0.0.1:5074");
+        compareRequest.Headers.Add("X-CSRF-TOKEN", token);
+        compareRequest.Content = JsonContent.Create(new
         {
             query = "rocket water",
             topK = 2,
@@ -46,12 +49,10 @@ public sealed class SearchApiTests
             mode = "compare",
             modelId = "lexical-fallback",
             assetIds = Array.Empty<Guid>()
-        }, HttpStatusCode.OK);
-        Assert.NotNull(compare.BaselineResults);
-        Assert.NotNull(compare.RerankedResults);
-        Assert.Equal(compare.BaselineResults![0].StartSec, compare.RerankedResults![0].StartSec);
-        Assert.Equal("reranker", compare.RerankedResults![0].ScoreKind);
-        Assert.NotNull(compare.RerankedResults![0].BaselineRank);
+        });
+        var compare = await client.SendAsync(compareRequest);
+        Assert.Equal(HttpStatusCode.Conflict, compare.StatusCode);
+        Assert.Contains("Live reranking is not available", await compare.Content.ReadAsStringAsync());
 
         using var bad = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/collections/{collection.Id}/search");
         bad.Headers.Add("Origin", "http://127.0.0.1:5074");

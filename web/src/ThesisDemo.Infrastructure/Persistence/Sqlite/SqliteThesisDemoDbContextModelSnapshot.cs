@@ -372,10 +372,16 @@ namespace ThesisDemo.Infrastructure.Persistence.Sqlite
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("CancelRequested")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid?>("ClaimToken")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset?>("ClaimedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CollectionId")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("CreatedUtc")
@@ -384,8 +390,33 @@ namespace ThesisDemo.Infrastructure.Persistence.Sqlite
                     b.Property<DateTimeOffset?>("EndedUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ErrorCode")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InputHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Kind")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ParentJobId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProgressJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RunId")
                         .HasColumnType("TEXT");
 
                     b.Property<int>("State")
@@ -397,9 +428,39 @@ namespace ThesisDemo.Infrastructure.Persistence.Sqlite
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CollectionId", "IdempotencyKey")
+                        .IsUnique();
+
                     b.HasIndex("State", "CreatedUtc");
 
                     b.ToTable("Jobs");
+                });
+
+            modelBuilder.Entity("ThesisDemo.Infrastructure.Jobs.JobEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DetailJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("JobId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("OccurredUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JobId", "Id");
+
+                    b.ToTable("JobEvents");
                 });
 
             modelBuilder.Entity("ThesisDemo.Infrastructure.Research.RecordedEvaluation", b =>

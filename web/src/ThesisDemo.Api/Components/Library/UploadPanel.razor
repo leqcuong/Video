@@ -1,0 +1,51 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using ThesisDemo.Infrastructure.Storage
+@inject OperationScope Operations
+
+<section class="mb-4">
+    <h2 class="h5">Upload video clips</h2>
+    <InputFile OnChange="UploadAsync" multiple accept=".mp4,.m4v,.mov,.webm,.mkv,.avi" class="form-control" disabled="@Busy" />
+    @if (Busy) { <p class="small mt-2" role="status">Uploading @_completed of @_total files...</p> }
+    @if (_messages.Count > 0)
+    {
+        <ul class="small mt-2" aria-live="polite">
+            @foreach (var message in _messages) { <li>@message</li> }
+        </ul>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Guid CollectionId { get; set; }
+    [Parameter] public EventCallback OnUploaded { get; set; }
+    private readonly List<string> _messages = [];
+    private bool Busy;
+    private int _total;
+    private int _completed;
+
+    private async Task UploadAsync(InputFileChangeEventArgs eventArgs)
+    {
+        Busy = true;
+        _messages.Clear();
+        _total = eventArgs.FileCount;
+        _completed = 0;
+        try
+        {
+            foreach (var file in eventArgs.GetMultipleFiles(100))
+            {
+                try
+                {
+                    await using var stream = file.OpenReadStream(MediaUploadService.MaxBytes);
+                    await Operations.ExecuteAsync((services, ct) => services.GetRequiredService<MediaUploadService>()
+                        .UploadAsync(CollectionId, file.Name, stream, file.Size, ct));
+                    _messages.Add($"{file.Name}: uploaded");
+                    await OnUploaded.InvokeAsync();
+                }
+                catch (Exception ex) { _messages.Add($"{file.Name}: {ex.Message}"); }
+                _completed++;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex) { _messages.Add(ex.Message); }
+        finally { Busy = false; }
+    }
+}

@@ -149,6 +149,8 @@ class Worker:
     def _search(self, request: dict[str, Any]) -> dict[str, Any]:
         if not self.rows:
             return self._error(str(request.get("requestId") or ""), "INDEX_NOT_LOADED", "No index is loaded.", True)
+        if request.get("indexId") != self.index_id:
+            return self._error(str(request.get("requestId") or ""), "INDEX_MISMATCH", "Requested index differs from loaded index.", False)
         top_k = int(request.get("topK", 10))
         candidate_k = int(request.get("candidateK", max(10, top_k)))
         if top_k < 1 or top_k > 100 or candidate_k < top_k or candidate_k > 1000:
@@ -163,7 +165,7 @@ class Worker:
         baseline = _score(query, self.rows, top_k, alpha, asset_ids)
         return {
             "status": "ok",
-            "indexId": request.get("indexId") or self.index_id,
+            "indexId": self.index_id,
             "modelId": request.get("modelId"),
             "effectiveConfig": {"topK": top_k, "candidateK": candidate_k, "hybridAlpha": min(1.0, max(0.0, alpha))},
             "warnings": ["semantic scoring uses lexical fallback until an embedding model is registered"],

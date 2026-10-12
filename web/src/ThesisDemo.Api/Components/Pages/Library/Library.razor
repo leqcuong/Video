@@ -26,6 +26,10 @@
     </section>
 
     <section class="col-lg-8">
+        @if (_selectedCollectionId.HasValue)
+        {
+            <ThesisDemo.Api.Components.Library.UploadPanel CollectionId="_selectedCollectionId.Value" OnUploaded="LoadAssetsAsync" />
+        }
         <div class="d-flex align-items-end gap-2 mb-3">
             <div class="flex-grow-1">
                 <label class="form-label" for="source">Source</label>
@@ -80,6 +84,7 @@
                         <th>Name</th>
                         <th>Legacy ID</th>
                         <th>State</th>
+                        <th>Select for processing</th>
                         <th>Media</th>
                         <th class="text-end">Duration</th>
                     </tr>
@@ -91,12 +96,18 @@
                             <td>@asset.OriginalFileName</td>
                             <td><code>@asset.LegacyAssetId</code></td>
                             <td>@asset.State</td>
+                            <td><input type="checkbox" aria-label="Process @asset.OriginalFileName" checked="@_selectedAssets.Contains(asset.Id)" @onchange="e => SelectAsset(asset.Id, e.Value is true)" /></td>
                             <td>@asset.MediaAvailability</td>
                             <td class="text-end">@asset.DurationSec.ToString("0.0")s</td>
                         </tr>
                     }
                 </tbody>
             </table>
+        </div>
+        <div class="d-flex align-items-center gap-2 mb-4">
+            <button class="btn btn-primary" disabled="@(_busy || _selectedAssets.Count == 0)" @onclick="ProcessSelectedAsync">Process selected (@_selectedAssets.Count)</button>
+            <label class="small"><input type="checkbox" @bind="_activateOnSuccess" /> Activate complete index automatically</label>
+            <a href="jobs" class="btn btn-link">View jobs</a>
         </div>
 
         @if (_diagnostics.Count > 0)
@@ -117,6 +128,8 @@
     private IReadOnlyList<AssetDto> _assets = [];
     private IReadOnlyList<RegisteredLegacySource> _sources = [];
     private readonly List<string> _diagnostics = [];
+    private readonly HashSet<Guid> _selectedAssets = [];
+    private bool _activateOnSuccess;
     private Guid? _selectedCollectionId;
     private string _sourceId = "full-rerun";
     private ImportPreviewResult? _preview;
@@ -146,6 +159,7 @@
     private async Task SelectCollectionAsync(Guid id)
     {
         _selectedCollectionId = id;
+        _selectedAssets.Clear();
         _preview = null;
         _diagnostics.Clear();
         await LoadAssetsAsync();
@@ -199,6 +213,28 @@
         var page = await Operations.ExecuteAsync((services, ct) =>
             services.GetRequiredService<CollectionHandlers>().ListAssetsAsync(_selectedCollectionId.Value, new ListAssetsQuery(1, 100), ct));
         _assets = page.Items;
+    }
+
+    private void SelectAsset(Guid id, bool selected)
+    {
+        if (selected) _selectedAssets.Add(id);
+        else _selectedAssets.Remove(id);
+    }
+
+    private async Task ProcessSelectedAsync()
+    {
+        if (!_selectedCollectionId.HasValue) return;
+        await RunAsync(async () =>
+        {
+            var job = await Operations.ExecuteAsync((services, ct) =>
+                services.GetRequiredService<ThesisDemo.Infrastructure.Jobs.ProcessingCommands>()
+                    .StartAsync(_selectedCollectionId.Value,
+                        new ThesisDemo.Application.Processing.ProcessingRequest(_selectedAssets.ToArray(),
+                            PublishPolicy: _activateOnSuccess ? "onSuccess" : "manual"), null, null, ct));
+            _status = $"Queued processing job {job.Id}. Monitor it in Jobs.";
+            _selectedAssets.Clear();
+            await LoadAssetsAsync();
+        });
     }
 
     private async Task RunAsync(Func<Task> action)

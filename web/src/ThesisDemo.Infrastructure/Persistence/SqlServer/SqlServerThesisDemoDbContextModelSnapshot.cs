@@ -409,11 +409,17 @@ namespace ThesisDemo.Infrastructure.Persistence.SqlServer
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("CancelRequested")
+                        .HasColumnType("bit");
+
                     b.Property<Guid?>("ClaimToken")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset?>("ClaimedUtc")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("CollectionId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("datetimeoffset");
@@ -421,9 +427,34 @@ namespace ThesisDemo.Infrastructure.Persistence.SqlServer
                     b.Property<DateTimeOffset?>("EndedUtc")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("ErrorCode")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("InputHash")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("ParentJobId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ProgressJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RequestJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("State")
                         .HasColumnType("int");
@@ -434,9 +465,41 @@ namespace ThesisDemo.Infrastructure.Persistence.SqlServer
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CollectionId", "IdempotencyKey")
+                        .IsUnique();
+
                     b.HasIndex("State", "CreatedUtc");
 
                     b.ToTable("Jobs");
+                });
+
+            modelBuilder.Entity("ThesisDemo.Infrastructure.Jobs.JobEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("DetailJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("JobId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset>("OccurredUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JobId", "Id");
+
+                    b.ToTable("JobEvents");
                 });
 
             modelBuilder.Entity("ThesisDemo.Infrastructure.Research.RecordedEvaluation", b =>

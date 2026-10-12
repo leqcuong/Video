@@ -7,7 +7,8 @@ using ThesisDemo.Infrastructure.Jobs;
 namespace ThesisDemo.Infrastructure.Legacy;
 
 public sealed record PipelineAsset(Guid Id, string LegacyId, string MediaPath);
-public sealed record PipelineOutcome(int ExitCode, IReadOnlyDictionary<Guid, bool> Outcomes, string OutputRoot);
+public sealed record PipelineOutcome(int ExitCode, IReadOnlyDictionary<Guid, bool> Outcomes, string OutputRoot,
+    string EmbeddingBackend, string EmbeddingModel);
 
 public sealed class PythonPipelineBridge(IConfiguration configuration, IDurableJobRepository jobs)
 {
@@ -51,6 +52,7 @@ public sealed class PythonPipelineBridge(IConfiguration configuration, IDurableJ
         using var process = Process.Start(info) ?? throw new InvalidOperationException("Pipeline runner did not start.");
         var errors = process.StandardError.ReadToEndAsync(ct);
         var outcomes = new Dictionary<Guid, bool>();
+        string backend = "unknown", model = "unknown";
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromMinutes(configuration.GetValue("Processing:TimeoutMinutes", 120)));
         try
@@ -66,6 +68,11 @@ public sealed class PythonPipelineBridge(IConfiguration configuration, IDurableJ
                     var evt = document.RootElement;
                     if (evt.GetProperty("protocolVersion").GetInt32() != 1) throw new InvalidDataException("Unexpected pipeline protocol.");
                     var kind = evt.GetProperty("kind").GetString()!;
+                    if (kind == "job_finished")
+                    {
+                        backend = evt.TryGetProperty("embeddingBackend", out var b) ? b.GetString() ?? "unknown" : "unknown";
+                        model = evt.TryGetProperty("embeddingModel", out var m) ? m.GetString() ?? "unknown" : "unknown";
+                    }
                     if (kind is "asset_completed" or "asset_failed")
                     {
                         var assetId = evt.GetProperty("assetId").GetGuid();
@@ -84,7 +91,7 @@ public sealed class PythonPipelineBridge(IConfiguration configuration, IDurableJ
             }
             await process.WaitForExitAsync(timeout.Token);
             await errors;
-            return new PipelineOutcome(process.ExitCode, outcomes, output);
+            return new PipelineOutcome(process.ExitCode, outcomes, output, backend, model);
         }
         finally
         {

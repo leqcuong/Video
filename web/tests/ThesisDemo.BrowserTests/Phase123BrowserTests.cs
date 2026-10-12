@@ -12,7 +12,7 @@ public sealed class Phase123BrowserTests(ITestOutputHelper output)
     [Theory]
     [InlineData(1280, 800)]
     [InlineData(390, 844)]
-    public async Task Library_search_comparison_and_real_video_playback(int width, int height)
+    public async Task Library_search_and_real_video_playback(int width, int height)
     {
         var root = FindRepositoryRoot();
         var runDirectory = Path.Combine(Path.GetTempPath(), $"thesis-browser-{Guid.NewGuid():N}");
@@ -80,18 +80,8 @@ public sealed class Phase123BrowserTests(ITestOutputHelper output)
                 var stoppedAt = await player.EvaluateAsync<double>("v => v.currentTime");
                 Assert.InRange(stoppedAt, 1.125, 1.6);
 
-                await page.Locator("label[for='mode-compare']").ClickAsync();
-                await page.Locator("#model").FillAsync("lexical-fallback");
-                await page.GetByRole(AriaRole.Button, new() { Name = "Search", Exact = true }).ClickAsync();
-                await page.Locator(".comparison-view").WaitForAsync();
-                await page.Locator(".comparison-view > section").Nth(1).Locator(".comparison-view__row").First.WaitForAsync();
-                await page.GetByText("Searching...").WaitForAsync(new LocatorWaitForOptions { State = WaitForSelectorState.Hidden });
-                Assert.True(await page.GetByRole(AriaRole.Heading, new() { Name = "Baseline" }).IsVisibleAsync());
-                Assert.True(await page.GetByRole(AriaRole.Heading, new() { Name = "Reranked" }).IsVisibleAsync());
-                Assert.Equal(3, await page.Locator(".comparison-view > section").First.Locator(".comparison-view__row").CountAsync());
-                Assert.Equal(3, await page.Locator(".comparison-view > section").Nth(1).Locator(".comparison-view__row").CountAsync());
-                await page.Locator("video").WaitForAsync();
-                await page.WaitForFunctionAsync("() => document.querySelector('video')?.readyState >= 1");
+                Assert.True(await page.GetByText("Live reranking is not available.", new() { Exact = false }).IsVisibleAsync());
+                Assert.False(await page.Locator("#mode-compare").CountAsync() > 0);
                 Assert.False(await page.EvaluateAsync<bool>("() => document.documentElement.scrollWidth > innerWidth + 2"),
                     $"Horizontal overflow at {width}px");
 

@@ -1,0 +1,97 @@
+@page "/jobs"
+@implements IAsyncDisposable
+@using Microsoft.EntityFrameworkCore
+@using ThesisDemo.Infrastructure.Persistence
+@using ThesisDemo.Infrastructure.Jobs
+@inject OperationScope Operations
+
+<PageTitle>Jobs</PageTitle>
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h3 mb-0">Processing jobs</h1>
+    <button class="btn btn-outline-secondary" @onclick="LoadAsync">Refresh</button>
+</div>
+@if (_error is not null) { <div role="alert" class="alert alert-warning">@_error</div> }
+<div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+        <thead><tr><th>Created</th><th>Job</th><th>Status</th><th>Progress</th><th>Actions</th></tr></thead>
+        <tbody>
+            @foreach (var job in _jobs)
+            {
+                <tr>
+                    <td>@job.CreatedUtc.ToLocalTime().ToString("g")</td>
+                    <td><button class="btn btn-link btn-sm p-0" @onclick="() => SelectAsync(job.Id)">@job.Id.ToString("N")[..12]</button></td>
+                    <td>@job.State @(job.ErrorCode is null ? "" : $"({job.ErrorCode})")</td>
+                    <td>@(_events.TryGetValue(job.Id, out var progress) ? progress : "-")</td>
+                    <td>
+                        @if (job.State is JobState.Queued or JobState.Running)
+                        { <button class="btn btn-outline-danger btn-sm" @onclick="() => CancelAsync(job.Id)">Cancel</button> }
+                        @if (job.State is JobState.Failed or JobState.Partial or JobState.Canceled or JobState.Interrupted)
+                        { <button class="btn btn-outline-primary btn-sm" @onclick="() => RetryAsync(job.Id)">Retry failed</button> }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+@if (_selected.HasValue)
+{
+    <h2 class="h5">Events for @_selected.Value.ToString("N")[..12]</h2>
+    <ol class="small" aria-live="polite">
+        @foreach (var entry in _selectedEvents)
+        { <li><time>@entry.OccurredUtc.ToLocalTime().ToString("T")</time> @entry.Kind <code>@entry.DetailJson</code></li> }
+    </ol>
+}
+
+@code {
+    private List<DurableJob> _jobs = [];
+    private List<JobEvent> _selectedEvents = [];
+    private readonly Dictionary<Guid, string> _events = [];
+    private Guid? _selected;
+    private string? _error;
+    private CancellationTokenSource _lifetime = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        _ = PollAsync(_lifetime.Token);
+    }
+
+    private async Task PollAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
+        try { while (await timer.WaitForNextTickAsync(ct)) await InvokeAsync(LoadAsync); }
+        catch (OperationCanceledException) { }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var result = await Operations.ExecuteAsync(async (services, ct) =>
+            {
+                await using var db = await services.GetRequiredService<IDbContextFactory<ThesisDemoDbContext>>().CreateDbContextAsync(ct);
+                var jobs = await db.Jobs.AsNoTracking().OrderByDescending(x => x.CreatedUtc).Take(100).ToListAsync(ct);
+                var ids = jobs.Select(x => x.Id).ToArray();
+                var events = await db.JobEvents.AsNoTracking().Where(x => ids.Contains(x.JobId)).OrderBy(x => x.Id).ToListAsync(ct);
+                return (jobs, events);
+            });
+            _jobs = result.jobs;
+            _events.Clear();
+            foreach (var e in result.events.Where(x => x.Kind is "asset_completed" or "asset_failed"))
+                _events[e.JobId] = e.Kind.Replace('_', ' ');
+            _selectedEvents = _selected is Guid selected ? result.events.Where(x => x.JobId == selected).ToList() : [];
+            _error = null;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task SelectAsync(Guid id) { _selected = id; await LoadAsync(); }
+    private async Task CancelAsync(Guid id) => await RunAsync((cmd, ct) => cmd.CancelAsync(id, ct));
+    private async Task RetryAsync(Guid id) => await RunAsync((cmd, ct) => cmd.RetryAsync(id, true, false, ct));
+    private async Task RunAsync(Func<ProcessingCommands, CancellationToken, Task<DurableJob>> action)
+    {
+        try { await Operations.ExecuteAsync((services, ct) => action(services.GetRequiredService<ProcessingCommands>(), ct)); await LoadAsync(); }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+    public ValueTask DisposeAsync() { _lifetime.Cancel(); _lifetime.Dispose(); return ValueTask.CompletedTask; }
+}

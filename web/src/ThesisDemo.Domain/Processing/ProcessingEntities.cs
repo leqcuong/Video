@@ -9,11 +9,11 @@ public sealed class ProcessingRun : VersionedEntity
 {
     private static readonly IReadOnlyDictionary<RunState, RunState[]> Allowed = new Dictionary<RunState, RunState[]>
     {
-        [RunState.Draft] = [RunState.Queued], [RunState.Queued] = [RunState.Running, RunState.WaitingExternal, RunState.Canceled],
+        [RunState.Draft] = [RunState.Queued], [RunState.Queued] = [RunState.Running, RunState.WaitingExternal, RunState.Canceled, RunState.Interrupted],
         [RunState.WaitingExternal] = [RunState.Validating, RunState.Canceled],
         [RunState.Running] = [RunState.Validating, RunState.CancelRequested, RunState.Failed, RunState.Interrupted],
         [RunState.CancelRequested] = [RunState.Canceled],
-        [RunState.Validating] = [RunState.Succeeded, RunState.Partial, RunState.Failed, RunState.Canceled]
+        [RunState.Validating] = [RunState.Succeeded, RunState.Partial, RunState.Failed, RunState.Canceled, RunState.Interrupted]
     };
     private ProcessingRun() { }
     public ProcessingRun(Guid collectionId, RunMode mode, string configJson, string configHash, string inputSnapshotHash)

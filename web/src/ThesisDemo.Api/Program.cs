@@ -48,12 +48,15 @@ builder.Services.AddScoped<ISearchService, LegacySearchService>();
 builder.Services.AddSingleton<LocalMediaStore>();
 builder.Services.AddSingleton<ManagedStorage>();
 builder.Services.AddScoped<MediaUploadService>();
+builder.Services.AddScoped<SnapshotPublisher>();
+builder.Services.AddScoped<PythonPipelineBridge>();
+builder.Services.AddScoped<ProcessingCommands>();
 builder.Services.AddScoped<ReportImporter>();
 builder.Services.AddScoped<EvaluationReadRepository>();
 builder.Services.AddScoped<IDurableJobRepository, DurableJobRepository>();
 builder.Services.AddSingleton<JobDispatcher>();
 builder.Services.AddSingleton<IJobDispatcher>(sp => sp.GetRequiredService<JobDispatcher>());
-builder.Services.AddScoped<IJobHandler, NoOpJobHandler>();
+builder.Services.AddScoped<IJobHandler, ProcessingJobHandler>();
 builder.Services.AddHostedService<DurableJobWorker>();
 
 var app = builder.Build();
@@ -73,9 +76,4 @@ app.MapStaticAssets();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 app.Run();
 
-public sealed class NoOpJobHandler : IJobHandler
-{
-    public Task ExecuteAsync(Guid jobId, Guid claimToken, CancellationToken cancellationToken) =>
-        throw new NotSupportedException("No processing bridge is registered yet.");
-}
 public partial class Program { }

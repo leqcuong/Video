@@ -67,7 +67,31 @@ public sealed class DurableJobRepository(IDbContextFactory<ThesisDemoDbContext> 
     {
         await using var db = await factory.CreateDbContextAsync(ct);
         var lost = await db.Jobs.Where(x => x.State == JobState.Running).ToListAsync(ct);
-        foreach (var job in lost) { job.State = JobState.Interrupted; job.EndedUtc = DateTimeOffset.UtcNow; job.Version = Guid.NewGuid(); }
+        foreach (var job in lost)
+        {
+            job.State = job.CancelRequested ? JobState.Canceled : JobState.Interrupted;
+            job.EndedUtc = DateTimeOffset.UtcNow;
+            job.Version = Guid.NewGuid();
+            var run = await db.ProcessingRuns.SingleOrDefaultAsync(x => x.Id == job.RunId, ct);
+            if (run is not null)
+            {
+                if (job.CancelRequested && run.State == ThesisDemo.Domain.Processing.RunState.Running)
+                    run.TransitionTo(ThesisDemo.Domain.Processing.RunState.CancelRequested);
+                if (run.State == ThesisDemo.Domain.Processing.RunState.CancelRequested)
+                    run.TransitionTo(ThesisDemo.Domain.Processing.RunState.Canceled);
+                else if (run.State is ThesisDemo.Domain.Processing.RunState.Queued or ThesisDemo.Domain.Processing.RunState.Running or ThesisDemo.Domain.Processing.RunState.Validating)
+                    run.TransitionTo(job.CancelRequested ? ThesisDemo.Domain.Processing.RunState.Canceled : ThesisDemo.Domain.Processing.RunState.Interrupted);
+                var request = System.Text.Json.JsonSerializer.Deserialize<ThesisDemo.Application.Processing.ProcessingSnapshot>(job.RequestJson,
+                    new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+                if (request is not null)
+                {
+                    foreach (var asset in await db.VideoAssets.Where(x => request.AssetIds.Contains(x.Id) &&
+                                 (x.State == ThesisDemo.Domain.Library.AssetState.Queued || x.State == ThesisDemo.Domain.Library.AssetState.Processing)).ToListAsync(ct))
+                        asset.SetState(ThesisDemo.Domain.Library.AssetState.Failed);
+                }
+            }
+            db.JobEvents.Add(new JobEvent { JobId = job.Id, Kind = "job_interrupted" });
+        }
         try { await db.SaveChangesAsync(ct); } catch (DbUpdateConcurrencyException) { /* another worker recovered first */ }
         return await db.Jobs.Where(x => x.State == JobState.Queued).Select(x => x.Id).ToListAsync(ct);
     }
@@ -82,7 +106,9 @@ public sealed class DurableJobRepository(IDbContextFactory<ThesisDemoDbContext> 
     public async Task CompleteAsync(Guid id, Guid claimToken, bool succeeded, CancellationToken ct)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
-        if (!await db.Jobs.AnyAsync(x => x.Id == id && x.State == JobState.Running && x.ClaimToken == claimToken, ct)) return;
+        var job = await db.Jobs.AsNoTracking().SingleAsync(x => x.Id == id, ct);
+        if (job.ClaimToken != claimToken) throw new InvalidOperationException("Stale or invalid job claim.");
+        if (job.State != JobState.Running) return;
         await FinishAsync(id, claimToken, succeeded ? JobState.Succeeded : JobState.Failed, null, ct);
     }
 
@@ -157,7 +183,8 @@ public sealed class DurableJobWorker(IServiceScopeFactory scopes, JobDispatcher 
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            await repository.FinishAsync(id, token.Value, JobState.Canceled, "HOST_SHUTDOWN", CancellationToken.None);
+            // A host stop is recoverable. The next startup marks the claimed job
+            // and its in-flight assets interrupted, rather than claiming user cancellation.
             throw;
         }
         catch (OperationCanceledException) { await repository.FinishAsync(id, token.Value, JobState.Canceled, "CANCELED", CancellationToken.None); }
