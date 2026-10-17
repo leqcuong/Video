@@ -1,8 +1,9 @@
 # Tasks: Local Thesis Defense Web Demo
 
 Input: spec.md, plan.md, research.md, data-model.md, contracts, ux-spec.md and
-verification-plan.md. All tasks below are unimplemented. The documentation task
-does not mark application work complete.
+verification-plan.md. Checked tasks reflect implemented work; milestone acceptance
+still depends on the verification gates below. Documentation alone does not mark
+application work complete.
 
 Format: Tnnn [P if independently parallel] [USn] action and target path.
 All source paths are relative to repository root and describe future files.
@@ -49,11 +50,11 @@ T018 before T019. Independent verification: V03/V05/V06.
 
 ## Phase 4: US3 - Recorded Research Evidence (P1, M1)
 
-- [ ] T020 [US3] Implement registered report loaders and historical provenance in web/src/ThesisDemo.Infrastructure/Research/ReportImporter.cs; handle thesis/current count differences and unknown metadata.
-- [ ] T021 [US3] Build Track A/B/C summaries and Dapper report projections in web/src/ThesisDemo.Api/Components/Pages/Research and Infrastructure/Research/EvaluationReadRepository.cs.
-- [ ] T022 [US3] Add paginated per-query error/rank views with expected/retrieved playback in web/src/ThesisDemo.Api/Components/Research/QueryDiagnostics.razor.
-- [ ] T023 [US3] Add confidence-interval table/chart with finite-bootstrap labels in web/src/ThesisDemo.Api/Components/Research/SignificanceView.razor.
-- [ ] T024 [US3] Implement controlled artifact download and JSON/CSV/Markdown summaries in web/src/ThesisDemo.Api/Controllers/ArtifactsController.cs and Application/Research/Exports.
+- [x] T020 [US3] Implement registered report loaders and historical provenance in web/src/ThesisDemo.Infrastructure/Research/ReportImporter.cs; handle thesis/current count differences and unknown metadata.
+- [x] T021 [US3] Build Track A/B/C summaries and Dapper report projections in web/src/ThesisDemo.Api/Components/Pages/Research and Infrastructure/Research/EvaluationReadRepository.cs.
+- [x] T022 [US3] Add paginated per-query error/rank views with expected/retrieved playback in web/src/ThesisDemo.Api/Components/Research/QueryDiagnostics.razor.
+- [x] T023 [US3] Add confidence-interval table/chart with finite-bootstrap labels in web/src/ThesisDemo.Api/Components/Research/SignificanceView.razor.
+- [x] T024 [US3] Implement controlled artifact download and JSON/CSV/Markdown summaries in web/src/ThesisDemo.Api/Controllers/ArtifactsController.cs and Application/Research/Exports.
 - [ ] T025 [US1,US2,US3] Add and run import/search/media/report parity checks in web/tests/ThesisDemo.IntegrationTests and web/tests/bridge; measure warm full-corpus search before closing M1.
 
 Dependencies: T020 before T021-T024; each view can use recorded fixtures.
@@ -61,9 +62,9 @@ Independent verification: recorded-report portions of V09-V14 plus provenance.
 
 ## Phase 5: US4 - Live Processing and Recovery (P1, M2)
 
-- [ ] T026 [US4] Implement streamed upload validation/controller and batch UI in web/src/ThesisDemo.Api/Controllers/AssetsController.cs and Components/Library/UploadPanel.razor.
-- [ ] T027 [US4] Implement processing command/config snapshots and registered model choices in web/src/ThesisDemo.Application/Processing.
-- [ ] T028 [US4] Implement web/bridge/job_runner.py and Infrastructure/Legacy/PythonPipelineBridge.cs using isolated staging, real manifest progress and per-asset outcomes.
+- [x] T026 [US4] Implement streamed upload validation/controller and batch UI in web/src/ThesisDemo.Api/Controllers/AssetsController.cs and Components/Library/UploadPanel.razor.
+- [x] T027 [US4] Implement processing command/config snapshots and registered model choices in web/src/ThesisDemo.Application/Processing.
+- [x] T028 [US4] Implement web/bridge/job_runner.py and Infrastructure/Legacy/PythonPipelineBridge.cs using isolated staging, real manifest progress and per-asset outcomes.
 - [ ] T029 [US4] Implement JobsController, Jobs.razor and lifecycle tests under web/src/ThesisDemo.Api and web/tests/ThesisDemo.IntegrationTests/Jobs for cancel/retry/timeout/restart.
 - [ ] T030 [US4] Implement snapshot composition/validation/activation in web/src/ThesisDemo.Infrastructure/Search/SnapshotPublisher.cs; add V07/V08/V20 partial-publication and race checks.
 
@@ -104,7 +105,7 @@ T047. Do not mark real Colab verification complete using a mocked transfer alone
 
 ## Phase 8: US7 - Packaging and Defense Readiness (P1, Release Gate)
 
-- [ ] T048 [US7] Implement capabilities/preflight, demo query selection and offline asset readiness in web/src/ThesisDemo.Application/Demo and Api/Components/Pages/Demo.razor.
+- [x] T048 [US7] Implement capabilities/preflight, demo query selection and offline asset readiness in web/src/ThesisDemo.Application/Demo and Api/Components/Pages/Demo.razor.
 - [ ] T049 [US7] Implement web/scripts/prepare-demo.ps1, start-demo.ps1 and Bash equivalents; provide explicit database profiles, free-port selection and safe process shutdown.
 - [ ] T050 [All] Complete web/tests/ThesisDemo.BrowserTests and provider integration coverage for V01-V20; measure actual laptop memory/latency and responsive layout/accessibility.
 - [ ] T051 [All] Update .github/workflows/ci.yml for the new web solution/bridge and web configuration examples, preserving unrelated legacy checks; document reproducible setup.
@@ -124,4 +125,36 @@ After foundation, media endpoints/components and recorded-report import can proc
 in parallel when they touch separate files. Freeze shared DTO/contracts first.
 Keep edits to a common bridge module sequential. Review each milestone as a usable
 vertical slice before expanding the next one.
+
+## Progress and Remaining Verification (2026-10-13)
+
+The local .NET solution test run passed **56/56**: 26 unit, 3 architecture,
+25 integration and 2 browser tests (`dotnet test web/ThesisDemo.sln --no-restore
+--verbosity quiet`). This is fixture evidence, not a full-corpus or offline
+defense acceptance result. Checked implementation tasks above do not by
+themselves close their phase milestones.
+
+- **Phase 4:** T020-T024 implementation is present. T025 remains open: recorded
+  research/media/search parity and warm full-corpus performance were not
+  verified. Repeated historical query text currently maps to first available
+  playback evidence; ordinal alignment still needs review.
+- **Phase 5:** T026-T028 implementation is present. T029 remains open for full
+  cancel/retry/timeout/restart coverage; T030 remains open for publication/race
+  verification and a real short-clip processing rehearsal. The additional
+  snapshot timestamp mismatch regression test passed in the fixture suite.
+- **Phase 6:** T031 has a working benchmark import/version, basic sanitize,
+  seeded split UI and diagnostics with unit tests. It remains unchecked because
+  legacy sanitizer/split parity and durable execution are unverified. T032-T043
+  have not been completed.
+- **Phase 7:** T044-T047 remain open. The Colab ZIP handoff, receipt reconciliation,
+  notebook and actual GPU round trip are not implemented/verified; no GPU
+  acceptance evidence is claimed.
+- **Phase 8:** T048 preflight/demo page is implemented and its negative-readiness
+  integration test passes; checks explicitly label model, Colab and offline
+  rehearsal as unverified. T049 script files and T051 CI workflow have been
+  drafted but still need execution and CI/config review. T050 and T052 require
+  provider/browser coverage, measurements and an actual offline rehearsal.
+
+No manual live processing, external GPU run, full-corpus benchmark or CI execution
+was demonstrated by the 2026-10-13 fixture test pass.
 

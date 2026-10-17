@@ -149,6 +149,17 @@ public sealed class ProcessingLifecycleTests
                     "hash-fallback", "embedding"), [asset], true, default));
             Assert.Null(collection.ActiveIndexId);
 
+            await File.WriteAllTextAsync(Path.Combine(output, "index", "combined_index.json"),
+                JsonSerializer.Serialize(new[] { new { row.asset_id, row.segment_id, start_sec = 0.5, row.end_sec,
+                    row.caption, row.embedding } }));
+            await Assert.ThrowsAsync<InvalidDataException>(() => publisher.ComposeAsync(db, run.Id, config,
+                new PipelineOutcome(0, new Dictionary<Guid, bool> { [asset.Id] = true }, output,
+                    "sentence-transformers", "embedding"), [asset], true, default));
+            Assert.Null(collection.ActiveIndexId);
+            db.ChangeTracker.Clear();
+            await File.WriteAllTextAsync(Path.Combine(output, "index", "combined_index.json"),
+                JsonSerializer.Serialize(new[] { row }));
+
             var snapshot = await publisher.ComposeAsync(db, run.Id, config,
                 new PipelineOutcome(1, new Dictionary<Guid, bool> { [asset.Id] = true }, output,
                     "sentence-transformers", "embedding"), [asset], false, default);

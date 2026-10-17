@@ -13,6 +13,7 @@ using ThesisDemo.Infrastructure.Legacy;
 using ThesisDemo.Infrastructure.Persistence;
 using ThesisDemo.Infrastructure.Storage;
 using ThesisDemo.Infrastructure.Research;
+using ThesisDemo.Infrastructure.Demo;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls(LoopbackHost.Validate(builder.Configuration["Host:Url"]));
@@ -52,6 +53,8 @@ builder.Services.AddScoped<SnapshotPublisher>();
 builder.Services.AddScoped<PythonPipelineBridge>();
 builder.Services.AddScoped<ProcessingCommands>();
 builder.Services.AddScoped<ReportImporter>();
+builder.Services.AddScoped<BenchmarkStore>();
+builder.Services.AddScoped<DemoReadiness>();
 builder.Services.AddScoped<EvaluationReadRepository>();
 builder.Services.AddScoped<IDurableJobRepository, DurableJobRepository>();
 builder.Services.AddSingleton<JobDispatcher>();

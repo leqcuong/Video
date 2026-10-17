@@ -1,0 +1,55 @@
+@page "/demo"
+@using ThesisDemo.Application.Demo
+@using ThesisDemo.Infrastructure.Demo
+@inject OperationScope Operations
+
+<PageTitle>Demo preflight</PageTitle>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Defense preflight</h1>
+    <button class="btn btn-outline-secondary" @onclick="RefreshAsync">Refresh</button>
+</div>
+@if (_error is not null) { <p class="alert alert-danger" role="alert">@_error</p> }
+@if (_report is not null)
+{
+    <p class="small text-secondary">Checked @_report.CheckedUtc.ToLocalTime().ToString("g"). Search readiness is @_report.ReadyForOfflineSearch.
+        Checks do not replace the offline rehearsal.</p>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Capability</th><th>Status</th><th>Evidence / limitation</th></tr></thead>
+            <tbody>
+                @foreach (var check in _report.Checks)
+                {
+                    <tr><th scope="row">@check.Name</th><td>@check.Status</td><td>@check.Detail</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <h2 class="h5 mt-4">Candidate demo queries</h2>
+    <p class="small text-secondary">Examples come from recorded reports. Verify playback and live results before using them in a presentation.</p>
+    <div class="table-responsive">
+        <table class="table table-sm">
+            <thead><tr><th>Purpose</th><th>Query</th><th>Recorded evidence</th></tr></thead>
+            <tbody>
+                @foreach (var query in _report.Queries)
+                { <tr><th>@query.Purpose</th><td>@query.Query</td><td>@query.Evidence</td></tr> }
+            </tbody>
+        </table>
+    </div>
+    <a href="/search" class="btn btn-outline-primary">Open search</a>
+}
+
+@code {
+    private DemoPreflight? _report;
+    private string? _error;
+    protected override Task OnInitializedAsync() => RefreshAsync();
+    private async Task RefreshAsync()
+    {
+        try
+        {
+            _report = await Operations.ExecuteAsync((services, ct) =>
+                services.GetRequiredService<DemoReadiness>().CheckAsync(ct));
+            _error = null;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+}

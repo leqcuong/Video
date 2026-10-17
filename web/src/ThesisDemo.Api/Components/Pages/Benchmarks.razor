@@ -1,0 +1,85 @@
+@page "/benchmarks"
+@using ThesisDemo.Infrastructure.Research
+@inject OperationScope Operations
+
+<PageTitle>Benchmarks</PageTitle>
+<h1 class="h3">Benchmark versions</h1>
+<div class="d-flex align-items-end gap-3 flex-wrap mb-3">
+    <label>Benchmark name<input class="form-control" @bind="_name" maxlength="120" /></label>
+    <label>Import JSON (8 MiB maximum)<InputFile class="form-control" OnChange="ImportAsync" accept=".json,application/json" /></label>
+    <button class="btn btn-outline-secondary" @onclick="LoadAsync">Refresh</button>
+</div>
+@if (_error is not null) { <div role="alert" class="alert alert-danger">@_error</div> }
+@if (_message is not null) { <div role="status" class="alert alert-success">@_message</div> }
+<div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+        <thead><tr><th>Name</th><th>Version</th><th>Rows</th><th>SHA-256</th><th>Action</th></tr></thead>
+        <tbody>
+            @foreach (var item in _items)
+            {
+                <tr>
+                    <td>@item.Name</td><td>@item.Kind</td><td>@item.RowCount</td><td><code>@item.Sha256[..12]</code></td>
+                    <td>
+                        @if (item.Kind == "raw")
+                        { <button class="btn btn-sm btn-outline-primary" @onclick="() => SanitizeAsync(item.Id)">Sanitize</button> }
+                        @if (item.Kind == "clean")
+                        { <button class="btn btn-sm btn-outline-primary" @onclick="() => SplitAsync(item.Id)">Split 70/30 (seed 42)</button> }
+                    </td>
+                </tr>
+                @if (item.DiagnosticsJson != "{}")
+                { <tr><td colspan="5" class="small text-secondary">@item.DiagnosticsJson</td></tr> }
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    private string _name = "Research benchmark";
+    private IReadOnlyList<BenchmarkVersion> _items = [];
+    private string? _error;
+    private string? _message;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() => _items = await Operations.ExecuteAsync((services, ct) =>
+        Task.FromResult(services.GetRequiredService<BenchmarkStore>().List()));
+
+    private async Task ImportAsync(InputFileChangeEventArgs args)
+    {
+        try
+        {
+            await using var stream = args.File.OpenReadStream(8 * 1024 * 1024);
+            var result = await Operations.ExecuteAsync((services, ct) =>
+                services.GetRequiredService<BenchmarkStore>().ImportAsync(_name, stream, ct));
+            _error = null;
+            _message = $"Imported {result.RowCount} raw rows without modification.";
+            await LoadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; _message = null; }
+    }
+
+    private Task SanitizeAsync(Guid id) => RunAsync((store, ct) => store.SanitizeAsync(id, ct));
+    private async Task SplitAsync(Guid id)
+    {
+        try
+        {
+            var pair = await Operations.ExecuteAsync((services, ct) =>
+                services.GetRequiredService<BenchmarkStore>().SplitAsync(id, 0.7, 42, ct));
+            _error = null;
+            _message = $"Training: {pair.Training.RowCount}; evaluation: {pair.Evaluation.RowCount}.";
+            await LoadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; _message = null; }
+    }
+    private async Task RunAsync(Func<BenchmarkStore, CancellationToken, Task<BenchmarkVersion>> action)
+    {
+        try
+        {
+            var result = await Operations.ExecuteAsync((services, ct) => action(services.GetRequiredService<BenchmarkStore>(), ct));
+            _error = null;
+            _message = $"Created {result.Kind} version with {result.RowCount} rows.";
+            await LoadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; _message = null; }
+    }
+}

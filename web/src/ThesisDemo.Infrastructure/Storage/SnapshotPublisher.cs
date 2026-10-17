@@ -29,6 +29,7 @@ public sealed class SnapshotPublisher(ManagedStorage storage)
             throw new InvalidDataException("Index references an unsuccessful or unknown asset.");
 
         var expected = new HashSet<string>(StringComparer.Ordinal);
+        var segmentBounds = new Dictionary<string, (double Start, double End)>(StringComparer.Ordinal);
         foreach (var asset in succeeded)
         {
             var stem = asset.Id.ToString("N");
@@ -49,9 +50,10 @@ public sealed class SnapshotPublisher(ManagedStorage storage)
                 var segmentId = item.GetProperty("segment_id").GetString()!;
                 var start = item.GetProperty("start_sec").GetDouble();
                 var end = item.GetProperty("end_sec").GetDouble();
-                if (assetId != stem || !double.IsFinite(start) || !double.IsFinite(end) ||
+                if (assetId != stem || !double.IsFinite(start) || !double.IsFinite(end) || start < 0 || end <= start ||
                     end > asset.DurationSec + 1 || !expected.Add(stem + ":" + segmentId))
                     throw new InvalidDataException("Segment identity, bounds or uniqueness mismatch.");
+                segmentBounds.Add(stem + ":" + segmentId, (start, end));
                 var segment = new VideoSegment(set.Id, segmentId, start, end, item.GetProperty("caption").GetString()!);
                 segment.AddEvidenceText(OptionalText(item, "transcript_text"), OptionalText(item, "ocr_text"), OptionalText(item, "summary"));
                 db.VideoSegments.Add(segment);
@@ -68,6 +70,9 @@ public sealed class SnapshotPublisher(ManagedStorage storage)
             var end = Number(row, "end_sec");
             if (!double.IsFinite(start) || !double.IsFinite(end) || start < 0 || end <= start)
                 throw new InvalidDataException("Invalid index timestamps.");
+            var bounds = segmentBounds[key];
+            if (Math.Abs(start - bounds.Start) > 0.001 || Math.Abs(end - bounds.End) > 0.001)
+                throw new InvalidDataException("Index timestamps disagree with the validated segment set.");
             if (row["embedding"] is not JsonArray vector || vector.Count == 0)
                 throw new InvalidDataException("Missing embedding vector.");
             if (dimension == 0) dimension = vector.Count;

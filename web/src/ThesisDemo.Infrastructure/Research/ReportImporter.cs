@@ -26,9 +26,11 @@ public sealed class ReportImporter(IDbContextFactory<ThesisDemoDbContext> factor
             if (File.Exists(paths["report"]))
             {
                 using var baselineFile = JsonDocument.Parse(await File.ReadAllBytesAsync(paths["report"], ct));
+                // Repeated query text is legal in historical benchmark exports.
                 baselineEvidence = baselineFile.RootElement.GetProperty("per_query").EnumerateArray()
-                    .ToDictionary(x => x.GetProperty("query").GetString()!, x =>
-                        (x.GetProperty("expected_spans").GetRawText(), SanitizeTopResult(x)), StringComparer.Ordinal);
+                    .GroupBy(x => x.GetProperty("query").GetString() ?? "", StringComparer.Ordinal)
+                    .ToDictionary(g => g.Key, g =>
+                        (g.First().GetProperty("expected_spans").GetRawText(), SanitizeTopResult(g.First())), StringComparer.Ordinal);
             }
             foreach (var (kind, path) in paths)
             {
